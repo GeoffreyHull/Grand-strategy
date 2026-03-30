@@ -5,13 +5,27 @@ import type { GameState } from '@contracts/state'
 import type { CountryId, ProvinceId } from '@contracts/mechanics/map'
 import type { JobId } from '@contracts/mechanics/construction'
 import type { Fleet, FleetId } from '@contracts/mechanics/navy'
+import {
+  DEFAULT_NAVY_CONFIG,
+  validateNavyConfig,
+} from './types'
 
 export type { Fleet, FleetId, NavyState } from '@contracts/mechanics/navy'
-
-const FLEET_DURATION_FRAMES = 120
+export type { NavyConfig } from './types'
 
 export function buildNavyState() {
   return { fleets: {} as Record<FleetId, Fleet> }
+}
+
+export async function loadNavyConfig(
+  url = '/config/navy.json',
+): Promise<import('./types').NavyConfig> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to load navy config from ${url}: HTTP ${response.status}`)
+  }
+  const raw: unknown = await response.json()
+  return validateNavyConfig(raw)
 }
 
 export function requestBuildFleet(
@@ -19,6 +33,7 @@ export function requestBuildFleet(
   stateStore: StateStore<GameState>,
   ownerId: CountryId,
   locationId: ProvinceId,
+  config = DEFAULT_NAVY_CONFIG,
 ): void {
   const province = stateStore.getSlice('map').provinces[locationId]
 
@@ -36,7 +51,7 @@ export function requestBuildFleet(
     ownerId,
     locationId,
     buildableType:  'fleet',
-    durationFrames: FLEET_DURATION_FRAMES,
+    durationFrames: config.fleet.durationFrames,
     metadata:       {},
   })
 }
@@ -44,6 +59,7 @@ export function requestBuildFleet(
 export function initNavyMechanic(
   eventBus: EventBus<EventMap>,
   stateStore: StateStore<GameState>,
+  config = DEFAULT_NAVY_CONFIG,
 ): { destroy: () => void } {
   const sub = eventBus.on('construction:complete', (payload) => {
     if (payload.buildableType !== 'fleet') return
@@ -53,7 +69,7 @@ export function initNavyMechanic(
       id:           fleetId,
       countryId:    payload.ownerId,
       provinceId:   payload.locationId,
-      ships:        3,
+      ships:        config.fleet.ships,
       createdFrame: payload.completedFrame,
     }
 

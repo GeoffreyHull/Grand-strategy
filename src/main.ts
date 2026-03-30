@@ -6,9 +6,29 @@ import type { GameState } from '@contracts/state'
 import { buildMapState, initMapMechanic } from './mechanics/map/index'
 import { buildAIState, initAIMechanic } from './mechanics/ai/index'
 import { buildConstructionState, initConstructionMechanic } from './mechanics/construction/index'
-import { buildMilitaryState, initMilitaryMechanic } from './mechanics/military/index'
-import { buildNavyState, initNavyMechanic } from './mechanics/navy/index'
-import { buildBuildingsState, initBuildingsMechanic } from './mechanics/buildings/index'
+import {
+  buildMilitaryState,
+  initMilitaryMechanic,
+  loadMilitaryConfig,
+} from './mechanics/military/index'
+import {
+  buildNavyState,
+  initNavyMechanic,
+  loadNavyConfig,
+} from './mechanics/navy/index'
+import {
+  buildBuildingsState,
+  initBuildingsMechanic,
+  loadBuildingsConfig,
+} from './mechanics/buildings/index'
+
+// ── Config loading ────────────────────────────────────────────────────────────
+
+const [militaryConfig, navyConfig, buildingsConfig] = await Promise.all([
+  loadMilitaryConfig(),
+  loadNavyConfig(),
+  loadBuildingsConfig(),
+])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -46,11 +66,11 @@ gameLoop.addUpdateSystem(aiMechanic.update)
 const constructionMechanic = initConstructionMechanic(eventBus, stateStore)
 gameLoop.addUpdateSystem(constructionMechanic.update)
 
-// ── Military / Navy / Buildings (purely event-driven, no update tick needed) ─
+// ── Military / Navy / Buildings ───────────────────────────────────────────────
 
-initMilitaryMechanic(eventBus, stateStore)
-initNavyMechanic(eventBus, stateStore)
-initBuildingsMechanic(eventBus, stateStore)
+initMilitaryMechanic(eventBus, stateStore, militaryConfig)
+initNavyMechanic(eventBus, stateStore, navyConfig)
+initBuildingsMechanic(eventBus, stateStore, buildingsConfig)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 

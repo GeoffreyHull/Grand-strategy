@@ -1,0 +1,8 @@
+{
+  "buildings": {
+    "barracks": { "durationFrames": 90 },
+    "port":     { "durationFrames": 120 },
+    "farm":     { "durationFrames": 60 },
+    "walls":    { "durationFrames": 90 }
+  }
+}

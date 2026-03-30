@@ -1,5 +1,9 @@
 import type { ProvinceId, CountryId } from './mechanics/map'
 import type { AIDecision } from './mechanics/ai'
+import type { JobId, BuildableType } from './mechanics/construction'
+import type { ArmyId } from './mechanics/military'
+import type { FleetId } from './mechanics/navy'
+import type { BuildingId, BuildingType } from './mechanics/buildings'
 
 export interface EventMap {
   // Map mechanic events
@@ -12,7 +16,57 @@ export interface EventMap {
   'ai:decision-made':      { decision: AIDecision }
   'ai:player-country-set': { countryId: CountryId }
 
-  // Stubs for future mechanics (empty payloads as placeholders)
-  // 'diplomacy:war-declared':    { attackerId: CountryId; defenderId: CountryId }
-  // 'economy:trade-route-formed': { fromId: ProvinceId; toId: ProvinceId }
+  // Construction mechanic events
+  'construction:request': {
+    readonly jobId: JobId
+    readonly ownerId: CountryId
+    readonly locationId: ProvinceId
+    readonly buildableType: BuildableType
+    readonly durationFrames: number
+    readonly metadata: Readonly<Record<string, unknown>>
+  }
+  'construction:enqueued': {
+    readonly jobId: JobId
+    readonly ownerId: CountryId
+    readonly buildableType: BuildableType
+  }
+  'construction:cancelled': {
+    readonly jobId: JobId
+    readonly reason: string
+  }
+  'construction:complete': {
+    readonly jobId: JobId
+    readonly ownerId: CountryId
+    readonly locationId: ProvinceId
+    readonly buildableType: BuildableType
+    readonly completedFrame: number
+    readonly metadata: Readonly<Record<string, unknown>>
+  }
+
+  // Military mechanic events
+  'military:army-raised': {
+    readonly armyId: ArmyId
+    readonly countryId: CountryId
+    readonly provinceId: ProvinceId
+  }
+
+  // Navy mechanic events
+  'navy:fleet-formed': {
+    readonly fleetId: FleetId
+    readonly countryId: CountryId
+    readonly provinceId: ProvinceId
+  }
+  'navy:fleet-rejected': {
+    readonly ownerId: CountryId
+    readonly locationId: ProvinceId
+    readonly reason: 'not-coastal'
+  }
+
+  // Buildings mechanic events
+  'buildings:building-constructed': {
+    readonly buildingId: BuildingId
+    readonly countryId: CountryId
+    readonly provinceId: ProvinceId
+    readonly buildingType: BuildingType
+  }
 }

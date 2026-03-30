@@ -1,5 +1,9 @@
 import type { Province, Country, ProvinceId, CountryId } from './mechanics/map'
 import type { AIState } from './mechanics/ai'
+import type { ConstructionState } from './mechanics/construction'
+import type { MilitaryState } from './mechanics/military'
+import type { NavyState } from './mechanics/navy'
+import type { BuildingsState } from './mechanics/buildings'
 
 export interface MapState {
   readonly provinces: Readonly<Record<ProvinceId, Province>>
@@ -11,9 +15,10 @@ export interface MapState {
 }
 
 export interface GameState {
-  readonly map: MapState
-  readonly ai: AIState
-  // Future slices:
-  // readonly diplomacy: DiplomacyState
-  // readonly economy: EconomyState
+  readonly map:          MapState
+  readonly ai:           AIState
+  readonly construction: ConstructionState
+  readonly military:     MilitaryState
+  readonly navy:         NavyState
+  readonly buildings:    BuildingsState
 }

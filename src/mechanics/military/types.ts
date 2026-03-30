@@ -1,0 +1,43 @@
+// Internal types for the military mechanic.
+// All public-facing game types live in src/contracts/mechanics/military.ts.
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function assertPositiveFiniteNumber(value: unknown, path: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`${path} must be a positive finite number, got: ${String(value)}`)
+  }
+}
+
+export interface ArmyConfig {
+  readonly durationFrames: number
+  readonly strength: number
+}
+
+export interface MilitaryConfig {
+  readonly army: ArmyConfig
+}
+
+export const DEFAULT_MILITARY_CONFIG: MilitaryConfig = {
+  army: { durationFrames: 60, strength: 100 },
+}
+
+export function validateMilitaryConfig(raw: unknown): MilitaryConfig {
+  if (!isRecord(raw)) {
+    throw new Error('military config must be an object')
+  }
+  const army = raw['army']
+  if (!isRecord(army)) {
+    throw new Error('military.army must be an object')
+  }
+  assertPositiveFiniteNumber(army['durationFrames'], 'military.army.durationFrames')
+  assertPositiveFiniteNumber(army['strength'],       'military.army.strength')
+  return {
+    army: {
+      durationFrames: army['durationFrames'] as number,
+      strength:       army['strength'] as number,
+    },
+  }
+}

@@ -1,0 +1,19 @@
+import type { CountryId, ProvinceId } from './map'
+
+export type JobId = string & { readonly __brand: 'JobId' }
+
+export type BuildableType = 'army' | 'fleet' | 'building'
+
+export interface ConstructionJob {
+  readonly jobId: JobId
+  readonly ownerId: CountryId
+  readonly locationId: ProvinceId
+  readonly buildableType: BuildableType
+  readonly durationFrames: number
+  readonly progressFrames: number
+  readonly metadata: Readonly<Record<string, unknown>>
+}
+
+export interface ConstructionState {
+  readonly jobs: Readonly<Record<JobId, ConstructionJob>>
+}

@@ -114,7 +114,21 @@ Grand-strategy/
 
 ---
 
-## 7. Isolation Rules
+## 7. Model Selection
+
+| Task | Model |
+|------|-------|
+| Planning (architecture, design, implementation plans) | `claude-sonnet-4-6` |
+| Coding (implementation, editing files, tests) | `claude-haiku-4-5-20251001` |
+
+When dispatching subagents via the Agent tool:
+- Use `model: "sonnet"` for `Plan` subagents.
+- Use `model: "haiku"` (or omit, since Haiku is the session default) for `general-purpose` and `Explore` subagents doing implementation work.
+
+---
+
+## 8. Isolation Rules
+
 
 These rules are absolute. Do not break them.
 
@@ -126,7 +140,7 @@ These rules are absolute. Do not break them.
 
 ---
 
-## 8. Per-Mechanic README.md
+## 9. Per-Mechanic README.md
 
 Every mechanic directory **must** contain a `README.md`. The agent responsible for that mechanic owns this file.
 
@@ -160,7 +174,7 @@ Key decisions, tradeoffs, known limitations.
 
 ---
 
-## 9. Adding a New Mechanic
+## 10. Adding a New Mechanic
 
 Follow this checklist exactly:
 
@@ -172,11 +186,11 @@ Follow this checklist exactly:
 6. Add `src/contracts/mechanics/<name>.ts` with public-facing types (engine agent task — file a request if you are a mechanic agent).
 7. Add the mechanic's event keys to `src/contracts/events.ts` (engine agent task).
 8. Register the mechanic in `src/main.ts` (engine agent task).
-9. Add a row to the Agent Dispatch Table in this `CLAUDE.md`.
+9. Add a row to the Agent Dispatch Table (Section 6) in this `CLAUDE.md`.
 
 ---
 
-## 10. Code Conventions
+## 11. Code Conventions
 
 - **File names:** PascalCase for classes (`HexGrid.ts`), camelCase for modules (`types.ts`, `index.ts`).
 - **Exports:** Named exports only — no default exports.
@@ -187,7 +201,7 @@ Follow this checklist exactly:
 
 ---
 
-## 11. Testing Conventions
+## 12. Testing Conventions
 
 - Tests live in `src/mechanics/<name>/<name>.test.ts` (co-located, not in a separate `tests/` tree).
 - Cross-mechanic integration tests live in `tests/integration/`.
@@ -197,7 +211,7 @@ Follow this checklist exactly:
 
 ---
 
-## 12. Build & Dev Commands
+## 13. Build & Dev Commands
 
 ```bash
 npm install          # install dependencies
@@ -210,7 +224,7 @@ npm run typecheck    # tsc --noEmit (no emit, just type check)
 
 ---
 
-## 13. Git Workflow
+## 14. Git Workflow
 
 - **Primary branch:** `main`
 - **Feature branches:** `<type>/<short-description>` (e.g., `feat/hex-grid`, `fix/economy-overflow`)
@@ -222,7 +236,7 @@ npm run typecheck    # tsc --noEmit (no emit, just type check)
 
 ---
 
-## 14. Minimal Agent Prompt Template
+## 15. Minimal Agent Prompt Template
 
 Use this template to keep task prompts short when dispatching a mechanic agent:
 

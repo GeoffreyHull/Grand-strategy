@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grand Strategy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0f1a;
+      overflow: hidden;
+      font-family: 'Georgia', serif;
+      color: #e8d9b0;
+    }
+
+    #game-canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #ui-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      pointer-events: none;
+    }
+
+    #info-panel {
+      position: absolute;
+      top: 12px; right: 12px;
+      width: 220px;
+      background: rgba(10, 15, 26, 0.88);
+      border: 1px solid #4a6a9a;
+      border-radius: 4px;
+      padding: 12px;
+      pointer-events: none;
+      min-height: 100px;
+    }
+
+    #info-panel h2 {
+      font-size: 14px;
+      color: #e8c53a;
+      border-bottom: 1px solid #2a3a5a;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    #info-panel .field {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+      color: #c8c0a0;
+    }
+
+    #info-panel .field span:last-child {
+      color: #e8d9b0;
+      text-align: right;
+      max-width: 130px;
+    }
+
+    #info-panel .country-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    #info-panel.empty h2 {
+      color: #6a7a9a;
+    }
+
+    #legend {
+      position: absolute;
+      bottom: 12px; left: 12px;
+      background: rgba(10, 15, 26, 0.88);
+      border: 1px solid #4a6a9a;
+      border-radius: 4px;
+      padding: 10px 12px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      pointer-events: none;
+    }
+
+    #legend h3 {
+      font-size: 11px;
+      color: #e8c53a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #2a3a5a;
+      padding-bottom: 4px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+      font-size: 11px;
+      color: #c8c0a0;
+      gap: 7px;
+    }
+
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    #title-bar {
+      position: absolute;
+      top: 12px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #e8c53a;
+      text-shadow: 0 0 20px rgba(232,197,58,0.4);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-overlay">
+    <div id="title-bar">Grand Strategy</div>
+    <div id="info-panel" class="empty">
+      <h2>Select a Province</h2>
+      <p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>
+    </div>
+    <div id="legend">
+      <h3>Nations</h3>
+      <div id="legend-list"></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

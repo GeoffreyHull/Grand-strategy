@@ -4,6 +4,33 @@ This file is the authoritative guide for AI assistants (Claude Code agents) work
 
 ---
 
+## 0. Agent Quick Reference
+
+> **Mechanic agents: read this section only.** The rest of the file is for human developers and the engine agent.
+
+**Your context:**
+- Your mechanic: `src/mechanics/<name>/` (all files)
+- Shared contracts: `src/contracts/mechanics/<name>.ts`, `src/contracts/events.ts`
+- Do NOT read or modify: `src/engine/`, `src/contracts/` (any other file), `src/main.ts`
+
+**Hard rules:**
+1. Only export from `index.ts`. No other file in your mechanic may be imported externally.
+2. Never import from another mechanic (`src/mechanics/<other>/`). Use events instead.
+3. To communicate with other mechanics: emit or subscribe to events via `src/contracts/events.ts`.
+4. Need a new contract type or event? Add a `// TODO: add to contracts` comment and document it in your `README.md`. Do not edit `contracts/` directly.
+5. No `window`, `document`, or `canvas` in logic files — renderer files only.
+
+**Code conventions:**
+- Named exports only (no default exports). No `any` — use `unknown`. `interface` for objects, `type` for unions.
+- File names: PascalCase for classes (`HexGrid.ts`), camelCase for modules (`types.ts`).
+- No side effects at module level.
+
+**Tests:** `src/mechanics/<name>/<name>.test.ts`. Mock `EventBus` and `StateStore` — never use real instances.
+
+**README:** Update `README.md` in every commit. An outdated README is a bug. Required sections: Purpose, Public API, Events Emitted, Events Consumed, State Slice, Design Notes.
+
+---
+
 ## 1. Project Overview
 
 **Grand-strategy** is a browser-based grand strategy game written in TypeScript. It runs entirely in the browser with no server-side runtime. The game is designed around strictly isolated mechanics so that a dedicated Claude agent can be spun up at any time to work on a single mechanic with a minimal, focused context.
@@ -38,67 +65,23 @@ This isolation means any agent working on a mechanic only needs three things in 
 
 ```
 Grand-strategy/
-├── CLAUDE.md                         ← this file
-├── README.md
-├── index.html                        ← Vite entry point
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── vitest.config.ts
-│
+├── CLAUDE.md, README.md, index.html, package.json, tsconfig.json, vite.config.ts, vitest.config.ts
 ├── src/
 │   ├── main.ts                       ← bootstraps game loop, registers mechanics
-│   │
 │   ├── contracts/                    ← shared interfaces, event types, enums
-│   │   ├── index.ts                  ← barrel export (re-exports everything)
+│   │   ├── index.ts                  ← barrel export
 │   │   ├── events.ts                 ← typed EventBus event map
 │   │   ├── state.ts                  ← root GameState shape
-│   │   └── mechanics/
-│   │       ├── map.ts
-│   │       ├── diplomacy.ts
-│   │       ├── military.ts
-│   │       ├── economy.ts
-│   │       ├── population.ts
-│   │       ├── technology.ts
-│   │       └── events-system.ts
-│   │
-│   ├── engine/                       ← game loop, event bus, state store
-│   │   ├── GameLoop.ts
-│   │   ├── EventBus.ts
-│   │   └── StateStore.ts
-│   │
-│   └── mechanics/                    ← one subdirectory per mechanic
-│       ├── map/
-│       │   ├── README.md             ← mechanic documentation (owned by map agent)
-│       │   ├── index.ts              ← public API — only file others may import
-│       │   ├── MapRenderer.ts
-│       │   ├── HexGrid.ts
-│       │   ├── Terrain.ts
-│       │   ├── types.ts              ← mechanic-private types
-│       │   └── map.test.ts
-│       ├── diplomacy/
-│       │   ├── README.md
-│       │   ├── index.ts
-│       │   ├── RelationshipMatrix.ts
-│       │   ├── Treaties.ts
-│       │   ├── types.ts
-│       │   └── diplomacy.test.ts
-│       ├── military/
-│       │   ├── README.md
-│       │   └── index.ts
-│       ├── economy/
-│       │   ├── README.md
-│       │   └── index.ts
-│       ├── population/
-│       │   ├── README.md
-│       │   └── index.ts
-│       ├── technology/
-│       │   ├── README.md
-│       │   └── index.ts
-│       └── events-system/
-│           ├── README.md
-│           └── index.ts
-│
+│   │   └── mechanics/<name>.ts       ← one file per mechanic (map, diplomacy, military, economy, population, technology, events-system)
+│   ├── engine/
+│   │   ├── GameLoop.ts, EventBus.ts, StateStore.ts
+│   └── mechanics/
+│       └── <name>/                   ← one directory per mechanic (same names as above)
+│           ├── README.md             ← mechanic documentation (required)
+│           ├── index.ts              ← public API — only file others may import
+│           ├── types.ts              ← mechanic-private types
+│           ├── <name>.test.ts
+│           └── ...                   ← additional implementation files as needed
 └── tests/
     └── integration/                  ← cross-mechanic integration tests only
 ```
@@ -121,18 +104,13 @@ Grand-strategy/
 
 ## 6. Agent Dispatch Table
 
-When spawning a Claude agent to work on a specific mechanic, provide only these files as context:
+**For any mechanic agent** (`<name>` = map | diplomacy | military | economy | population | technology | events-system):
+- `src/mechanics/<name>/**`
+- `src/contracts/mechanics/<name>.ts`
+- `src/contracts/events.ts`
+- `CLAUDE.md` **Section 0 only**
 
-| Agent | Files to include in context |
-|-------|-----------------------------|
-| **Map** | `src/mechanics/map/**`, `src/contracts/mechanics/map.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Diplomacy** | `src/mechanics/diplomacy/**`, `src/contracts/mechanics/diplomacy.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Military** | `src/mechanics/military/**`, `src/contracts/mechanics/military.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Economy** | `src/mechanics/economy/**`, `src/contracts/mechanics/economy.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Population** | `src/mechanics/population/**`, `src/contracts/mechanics/population.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Technology** | `src/mechanics/technology/**`, `src/contracts/mechanics/technology.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Events System** | `src/mechanics/events-system/**`, `src/contracts/mechanics/events-system.ts`, `src/contracts/events.ts`, `CLAUDE.md` |
-| **Engine** | `src/engine/**`, `src/contracts/**`, `src/main.ts`, `CLAUDE.md` |
+**Engine agent:** `src/engine/**`, `src/contracts/**`, `src/main.ts`, `CLAUDE.md` (full)
 
 ---
 
@@ -241,3 +219,26 @@ npm run typecheck    # tsc --noEmit (no emit, just type check)
 - **No force pushes** to `main`.
 - Commits must be atomic — one logical change per commit.
 - Mechanic agents commit only within their mechanic's directory and their mechanic's `README.md`. Changes to `contracts/`, `engine/`, or `main.ts` require the engine agent.
+
+---
+
+## 14. Minimal Agent Prompt Template
+
+Use this template to keep task prompts short when dispatching a mechanic agent:
+
+```
+Mechanic: <name>
+Branch: <branch-name>
+Task: <one sentence describing what to implement or fix>
+
+Context files:
+- src/mechanics/<name>/        (your mechanic)
+- src/contracts/mechanics/<name>.ts
+- src/contracts/events.ts
+- CLAUDE.md Section 0          (rules — read this section only)
+```
+
+For the engine agent, replace the context block with:
+```
+Context files: src/engine/**, src/contracts/**, src/main.ts, CLAUDE.md (full)
+```

@@ -1,0 +1,12 @@
+{
+  "technologies": {
+    "agriculture":       { "durationFrames": 60  },
+    "iron-working":      { "durationFrames": 90  },
+    "steel-working":     { "durationFrames": 120 },
+    "trade-routes":      { "durationFrames": 80  },
+    "writing":           { "durationFrames": 70  },
+    "siege-engineering": { "durationFrames": 100 },
+    "cartography":       { "durationFrames": 80  },
+    "bureaucracy":       { "durationFrames": 90  }
+  }
+}

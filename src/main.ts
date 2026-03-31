@@ -21,13 +21,19 @@ import {
   initBuildingsMechanic,
   loadBuildingsConfig,
 } from './mechanics/buildings/index'
+import {
+  buildTechnologyState,
+  initTechnologyMechanic,
+  loadTechnologyConfig,
+} from './mechanics/technology/index'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
-const [militaryConfig, navyConfig, buildingsConfig] = await Promise.all([
+const [militaryConfig, navyConfig, buildingsConfig, technologyConfig] = await Promise.all([
   loadMilitaryConfig(),
   loadNavyConfig(),
   loadBuildingsConfig(),
+  loadTechnologyConfig(),
 ])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -45,6 +51,7 @@ const stateStore = new StateStore<GameState>({
   military:     buildMilitaryState(),
   navy:         buildNavyState(),
   buildings:    buildBuildingsState(),
+  technology:   buildTechnologyState(),
 })
 const gameLoop = new GameLoop(20)
 
@@ -71,6 +78,7 @@ gameLoop.addUpdateSystem(constructionMechanic.update)
 initMilitaryMechanic(eventBus, stateStore, militaryConfig)
 initNavyMechanic(eventBus, stateStore, navyConfig)
 initBuildingsMechanic(eventBus, stateStore, buildingsConfig)
+initTechnologyMechanic(eventBus, stateStore, technologyConfig)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -92,6 +100,10 @@ eventBus.on('navy:fleet-formed', ({ fleetId, countryId, provinceId }) => {
 
 eventBus.on('buildings:building-constructed', ({ buildingId, countryId, provinceId, buildingType }) => {
   console.debug(`[Buildings] ${buildingType} (${buildingId}) built by ${countryId} in ${provinceId}`)
+})
+
+eventBus.on('technology:research-completed', ({ technologyId, countryId, technologyType }) => {
+  console.debug(`[Technology] ${technologyType} (${technologyId}) researched by ${countryId}`)
 })
 
 gameLoop.start()

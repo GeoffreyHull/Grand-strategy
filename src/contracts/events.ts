@@ -4,6 +4,7 @@ import type { JobId, BuildableType } from './mechanics/construction'
 import type { ArmyId } from './mechanics/military'
 import type { FleetId } from './mechanics/navy'
 import type { BuildingId, BuildingType } from './mechanics/buildings'
+import type { TechnologyId, TechnologyType } from './mechanics/technology'
 
 export interface EventMap {
   // Map mechanic events
@@ -68,5 +69,17 @@ export interface EventMap {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
     readonly buildingType: BuildingType
+  }
+
+  // Technology mechanic events
+  'technology:research-completed': {
+    readonly technologyId: TechnologyId
+    readonly countryId: CountryId
+    readonly technologyType: TechnologyType
+  }
+  'technology:research-rejected': {
+    readonly ownerId: CountryId
+    readonly technologyType: TechnologyType
+    readonly reason: 'already-researched'
   }
 }

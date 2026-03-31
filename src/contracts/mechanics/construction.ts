@@ -2,7 +2,7 @@ import type { CountryId, ProvinceId } from './map'
 
 export type JobId = string & { readonly __brand: 'JobId' }
 
-export type BuildableType = 'army' | 'fleet' | 'building'
+export type BuildableType = 'army' | 'fleet' | 'building' | 'technology'
 
 export interface ConstructionJob {
   readonly jobId: JobId

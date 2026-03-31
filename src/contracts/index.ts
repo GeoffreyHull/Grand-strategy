@@ -42,5 +42,12 @@ export type {
   BuildingsState,
 } from './mechanics/buildings'
 
+export type {
+  TechnologyId,
+  TechnologyType,
+  ResearchedTechnology,
+  TechnologyState,
+} from './mechanics/technology'
+
 export type { EventMap } from './events'
 export type { MapState, GameState } from './state'

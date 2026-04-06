@@ -2,6 +2,68 @@ import { describe, it, expect } from 'vitest'
 import { cellKey, parseCellKey, hexToPixel, pixelToHex, hexNeighbors, hexCorners } from './HexGrid'
 import { buildMapState } from './index'
 import { WORLD_PROVINCES, WORLD_COUNTRIES } from './WorldData'
+import { clampZoom, zoomToward, screenToWorld, MIN_ZOOM, MAX_ZOOM } from './Camera'
+import type { CameraState } from './Camera'
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+
+describe('clampZoom', () => {
+  it('clamps below MIN_ZOOM', () => {
+    expect(clampZoom(0)).toBe(MIN_ZOOM)
+    expect(clampZoom(-1)).toBe(MIN_ZOOM)
+  })
+
+  it('clamps above MAX_ZOOM', () => {
+    expect(clampZoom(999)).toBe(MAX_ZOOM)
+  })
+
+  it('leaves valid values unchanged', () => {
+    expect(clampZoom(1)).toBe(1)
+    expect(clampZoom(2.5)).toBe(2.5)
+  })
+})
+
+describe('screenToWorld', () => {
+  it('identity camera maps screen coords to same world coords', () => {
+    const cam: CameraState = { panX: 0, panY: 0, zoom: 1 }
+    expect(screenToWorld(cam, 100, 200)).toEqual({ x: 100, y: 200 })
+  })
+
+  it('accounts for pan', () => {
+    const cam: CameraState = { panX: 50, panY: 100, zoom: 1 }
+    expect(screenToWorld(cam, 150, 200)).toEqual({ x: 100, y: 100 })
+  })
+
+  it('accounts for zoom', () => {
+    const cam: CameraState = { panX: 0, panY: 0, zoom: 2 }
+    expect(screenToWorld(cam, 200, 400)).toEqual({ x: 100, y: 200 })
+  })
+})
+
+describe('zoomToward', () => {
+  it('preserves the world point under the cursor', () => {
+    const cam: CameraState = { panX: 0, panY: 0, zoom: 1 }
+    const screenX = 300
+    const screenY = 200
+    const worldBefore = screenToWorld(cam, screenX, screenY)
+    const newCam = zoomToward(cam, screenX, screenY, 2)
+    const worldAfter = screenToWorld(newCam, screenX, screenY)
+    expect(worldAfter.x).toBeCloseTo(worldBefore.x)
+    expect(worldAfter.y).toBeCloseTo(worldBefore.y)
+  })
+
+  it('clamps zoom to MIN_ZOOM', () => {
+    const cam: CameraState = { panX: 0, panY: 0, zoom: MIN_ZOOM }
+    const newCam = zoomToward(cam, 0, 0, 0.001)
+    expect(newCam.zoom).toBe(MIN_ZOOM)
+  })
+
+  it('clamps zoom to MAX_ZOOM', () => {
+    const cam: CameraState = { panX: 0, panY: 0, zoom: MAX_ZOOM }
+    const newCam = zoomToward(cam, 0, 0, 100)
+    expect(newCam.zoom).toBe(MAX_ZOOM)
+  })
+})
 
 // ── HexGrid ──────────────────────────────────────────────────────────────────
 

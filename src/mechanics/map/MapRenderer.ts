@@ -5,6 +5,8 @@ import type { MapState } from '@contracts/state'
 import type { Country, Province } from '@contracts/mechanics/map'
 import { hexToPixel, hexCorners, hexNeighbors, cellKey } from './HexGrid'
 import type { HexRenderConfig } from './types'
+import { applyTransform, resetTransform } from './Camera'
+import type { CameraState } from './Camera'
 
 function darkenColor(hex: string, amount = 40): string {
   const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount)
@@ -51,13 +53,17 @@ export class MapRenderer {
     this.canvas.height = height
   }
 
-  render(state: Readonly<MapState>): void {
+  render(state: Readonly<MapState>, camera: CameraState): void {
     const { ctx, cfg } = this
     const { width, height } = this.canvas
 
-    // 1. Ocean background
+    // 1. Ocean background (screen space — before transform)
+    resetTransform(ctx)
     ctx.fillStyle = '#1a3a5c'
     ctx.fillRect(0, 0, width, height)
+
+    // Apply camera transform — all subsequent drawing is in world space
+    applyTransform(ctx, camera)
 
     const provinces = Object.values(state.provinces) as Province[]
     const countries  = state.countries
@@ -176,8 +182,8 @@ export class MapRenderer {
       }
     }
 
-    // 7. Province labels (shown when hexSize is large enough)
-    if (cfg.hexSize >= 22) {
+    // 7. Province labels (shown when effective pixel size is large enough)
+    if (cfg.hexSize * camera.zoom >= 22) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.font = `${Math.max(8, cfg.hexSize * 0.38)}px Georgia, serif`
@@ -219,5 +225,8 @@ export class MapRenderer {
         ctx.shadowBlur = 0
       }
     }
+
+    // Reset transform after world-space drawing
+    resetTransform(ctx)
   }
 }

@@ -26,7 +26,7 @@ export function buildTechnologyState() {
 }
 
 export async function loadTechnologyConfig(
-  url = '/config/technology.json',
+  url = `${import.meta.env.BASE_URL}config/technology.json`,
 ): Promise<import('./types').TechnologyConfig> {
   const response = await fetch(url)
   if (!response.ok) {

@@ -18,7 +18,7 @@ export function buildMilitaryState() {
 }
 
 export async function loadMilitaryConfig(
-  url = '/config/military.json',
+  url = `${import.meta.env.BASE_URL}config/military.json`,
 ): Promise<import('./types').MilitaryConfig> {
   const response = await fetch(url)
   if (!response.ok) {

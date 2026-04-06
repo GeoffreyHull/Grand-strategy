@@ -18,7 +18,7 @@ export function buildNavyState() {
 }
 
 export async function loadNavyConfig(
-  url = '/config/navy.json',
+  url = `${import.meta.env.BASE_URL}config/navy.json`,
 ): Promise<import('./types').NavyConfig> {
   const response = await fetch(url)
   if (!response.ok) {

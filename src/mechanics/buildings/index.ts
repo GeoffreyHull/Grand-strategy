@@ -19,7 +19,7 @@ export function buildBuildingsState() {
 }
 
 export async function loadBuildingsConfig(
-  url = '/config/buildings.json',
+  url = `${import.meta.env.BASE_URL}config/buildings.json`,
 ): Promise<import('./types').BuildingsConfig> {
   const response = await fetch(url)
   if (!response.ok) {

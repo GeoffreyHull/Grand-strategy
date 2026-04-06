@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Renders and manages the world map — a 30×20 pointy-top hex grid containing 20 nations and 130 named provinces. Handles province selection/hover via mouse interaction and emits typed events for other mechanics to consume.
+Renders and manages the world map — a 30×20 pointy-top hex grid containing 20 nations and 130 named provinces. Handles province selection/hover via mouse interaction and emits typed events for other mechanics to consume. Supports camera zoom (scroll wheel / pinch) and pan (drag / touch) with full mobile support.
 
 ## Public API
 
@@ -21,7 +21,7 @@ Exported from `src/mechanics/map/index.ts`:
 
 | Event name | Payload type | When it fires |
 |---|---|---|
-| `map:province-selected` | `{ provinceId, countryId }` | User clicks a province cell |
+| `map:province-selected` | `{ provinceId, countryId }` | User clicks or taps a province cell |
 | `map:province-hovered` | `{ provinceId \| null }` | Mouse enters or leaves a province |
 | `map:country-selected` | `{ countryId }` | User clicks any province (fires with province-selected) |
 | `map:ready` | `{ provinceCount, countryCount }` | After `initMapMechanic` completes setup |
@@ -48,6 +48,20 @@ interface MapState {
   cellIndex: Record<string, ProvinceId>     // "col,row" → ProvinceId, O(1) lookup
 }
 ```
+
+Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameState`. It is managed locally in `initMapMechanic` and never serialised.
+
+## Camera Controls
+
+| Action | Desktop | Mobile |
+|---|---|---|
+| **Pan** | Left-click drag | Single-finger drag |
+| **Zoom** | Scroll wheel | Pinch-to-zoom (two fingers) |
+| **Select province** | Left-click (no drag) | Tap |
+
+- Zoom range: `MIN_ZOOM` (0.3×) to `MAX_ZOOM` (5×).
+- Zoom is always centered on the cursor / pinch midpoint.
+- Pinch also pans: moving both fingers translates the view simultaneously.
 
 ## World Design
 
@@ -82,6 +96,10 @@ interface MapState {
 
 ## Design Notes
 
+- **Camera implementation:** `Camera.ts` provides pure math (`zoomToward`, `screenToWorld`). `MapRenderer` applies a single `ctx.setTransform` before drawing all world-space geometry; no per-cell offset math changes were needed. `MapInteraction` converts screen coords to world coords via `screenToWorld` before hex hit-testing.
+- **Drag vs click disambiguation:** A press is treated as a click only if the pointer moves less than 4px total. This prevents accidental province selection while panning.
+- **Touch gesture restart:** When one finger lifts during a two-finger gesture (pinch → single pan), the interaction seamlessly restarts a single-touch pan from the current position.
+- **Label visibility:** Province labels are shown only when `hexSize × zoom ≥ 22` effective pixels, keeping the map readable at all zoom levels.
 - **Hex geometry:** Pointy-top, odd-row offset. Cell centers computed by `HexGrid.ts`; pixel→hex inversion done via `pixelToHex`. `isPointInHex` is available but the primary interaction uses `pixelToHex` for speed.
 - **isCoastal derivation:** Computed automatically in `buildMapState()` — a province is coastal if any of its cells has a neighbour cell with no assigned province (ocean).
 - **Cell conflict detection:** `map.test.ts` validates that no two provinces share a cell, serving as a data integrity gate.

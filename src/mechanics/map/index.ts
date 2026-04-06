@@ -10,6 +10,7 @@ import { cellKey, hexNeighbors } from './HexGrid'
 import { WORLD_COUNTRIES, WORLD_PROVINCES } from './WorldData'
 import { MapRenderer } from './MapRenderer'
 import { MapInteraction } from './MapInteraction'
+import type { CameraState } from './Camera'
 
 // Re-export public contract types for callers that import from this mechanic.
 export type { Province, Country, ProvinceId, CountryId }
@@ -120,12 +121,18 @@ export function initMapMechanic(
   eventBus: EventBus<EventMap>,
   stateStore: StateStore<GameState>,
 ): { render: () => void; destroy: () => void } {
-  const renderer    = new MapRenderer({ canvas, hexSize: HEX_SIZE })
+  const renderer = new MapRenderer({ canvas, hexSize: HEX_SIZE })
+
+  // Camera state lives here — it is pure UI state, not part of GameState.
+  let camera: CameraState = { panX: 0, panY: 0, zoom: 1 }
+
   const interaction = new MapInteraction(
     canvas,
     HEX_SIZE,
     eventBus,
     () => stateStore.getSlice('map'),
+    () => camera,
+    (newCamera) => { camera = newCamera },
   )
 
   // Size canvas to fill window
@@ -164,7 +171,7 @@ export function initMapMechanic(
   })
 
   return {
-    render:  () => renderer.render(stateStore.getSlice('map')),
+    render:  () => renderer.render(stateStore.getSlice('map'), camera),
     destroy: () => {
       interaction.destroy()
       window.removeEventListener('resize', resize)

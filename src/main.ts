@@ -26,7 +26,6 @@ import {
   initTechnologyMechanic,
   loadTechnologyConfig,
 } from './mechanics/technology/index'
-import { showStartScreen } from './ui/StartScreen'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
@@ -108,7 +107,3 @@ eventBus.on('technology:research-completed', ({ technologyId, countryId, technol
 })
 
 gameLoop.start()
-
-showStartScreen(mapState.countries, (countryId) => {
-  eventBus.emit('ai:player-country-set', { countryId })
-})

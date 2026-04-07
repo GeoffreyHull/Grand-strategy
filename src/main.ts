@@ -86,6 +86,12 @@ eventBus.on('map:ready', ({ provinceCount, countryCount }) => {
   console.info(`[Grand Strategy] Map ready — ${countryCount} nations, ${provinceCount} provinces`)
 })
 
+eventBus.on('map:province-conquered', ({ provinceId, newOwnerId, oldOwnerId }) => {
+  const newOwner = stateStore.getSlice('map').countries[newOwnerId]?.name ?? newOwnerId
+  const oldOwner = stateStore.getSlice('map').countries[oldOwnerId]?.name ?? oldOwnerId
+  console.info(`[Conquest] ${newOwner} seized ${provinceId} from ${oldOwner}`)
+})
+
 eventBus.on('ai:decision-made', ({ decision }) => {
   console.debug(`[AI] ${decision.countryId} → ${decision.action} (priority ${decision.priority.toFixed(2)})`)
 })

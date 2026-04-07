@@ -163,6 +163,71 @@ export function initMapMechanic(
     updateInfoPanel(stateStore.getSlice('map'))
   })
 
+  // Handle AI expansion — transfer a random neighbouring province on EXPAND
+  eventBus.on('ai:decision-made', ({ decision }) => {
+    if (decision.action !== 'EXPAND') return
+
+    const state = stateStore.getSlice('map')
+    const country = state.countries[decision.countryId]
+    if (!country || country.provinceIds.length === 0) return
+
+    // Collect unique neighbouring provinces owned by other countries
+    const seen = new Set<ProvinceId>()
+    const targets: ProvinceId[] = []
+    for (const provinceId of country.provinceIds) {
+      const province = state.provinces[provinceId]
+      if (!province) continue
+      for (const cell of province.cells) {
+        for (const nb of hexNeighbors(cell.col, cell.row)) {
+          const nbId = state.cellIndex[cellKey(nb.col, nb.row)]
+          if (!nbId || seen.has(nbId)) continue
+          seen.add(nbId)
+          const nbProvince = state.provinces[nbId]
+          if (nbProvince && nbProvince.countryId !== decision.countryId) {
+            targets.push(nbId)
+          }
+        }
+      }
+    }
+
+    if (targets.length === 0) return
+
+    const targetId = targets[Math.floor(Math.random() * targets.length)]
+    const targetProvince = state.provinces[targetId]
+    if (!targetProvince) return
+    const oldOwnerId = targetProvince.countryId
+    const newOwnerId = decision.countryId
+
+    stateStore.setState(draft => {
+      const oldOwner = draft.map.countries[oldOwnerId]
+      const newOwner = draft.map.countries[newOwnerId]
+      if (!oldOwner || !newOwner) return draft
+      return {
+        ...draft,
+        map: {
+          ...draft.map,
+          provinces: {
+            ...draft.map.provinces,
+            [targetId]: { ...targetProvince, countryId: newOwnerId },
+          },
+          countries: {
+            ...draft.map.countries,
+            [oldOwnerId]: {
+              ...oldOwner,
+              provinceIds: oldOwner.provinceIds.filter(id => id !== targetId),
+            },
+            [newOwnerId]: {
+              ...newOwner,
+              provinceIds: [...newOwner.provinceIds, targetId],
+            },
+          },
+        },
+      }
+    })
+
+    eventBus.emit('map:province-conquered', { provinceId: targetId, newOwnerId, oldOwnerId })
+  })
+
   // Signal ready
   const mapState = stateStore.getSlice('map')
   eventBus.emit('map:ready', {

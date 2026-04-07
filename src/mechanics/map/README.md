@@ -25,6 +25,7 @@ Exported from `src/mechanics/map/index.ts`:
 | `map:province-hovered` | `{ provinceId \| null }` | Mouse enters or leaves a province |
 | `map:country-selected` | `{ countryId }` | User clicks any province (fires with province-selected) |
 | `map:ready` | `{ provinceCount, countryCount }` | After `initMapMechanic` completes setup |
+| `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId }` | An AI nation successfully expands into a neighbouring province |
 
 ## Events Consumed
 
@@ -32,6 +33,7 @@ Exported from `src/mechanics/map/index.ts`:
 |---|---|---|
 | `map:province-hovered` | `{ provinceId \| null }` | Updates `hoveredProvinceId` in state; refreshes info panel |
 | `map:province-selected` | `{ provinceId, countryId }` | Updates `selectedProvinceId` in state; refreshes info panel |
+| `ai:decision-made` | `{ decision }` | On `EXPAND` action: picks a random neighbouring province of a different country, transfers ownership in state, emits `map:province-conquered` |
 
 *(The mechanic subscribes to its own events so state flows through a single path.)*
 

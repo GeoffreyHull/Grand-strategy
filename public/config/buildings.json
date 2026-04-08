@@ -1,8 +1,17 @@
 {
   "buildings": {
-    "barracks": { "durationFrames": 90 },
-    "port":     { "durationFrames": 120 },
-    "farm":     { "durationFrames": 60 },
-    "walls":    { "durationFrames": 90 }
+    "barracks": { "durationFrames": 90,  "incomeBonus": 0  },
+    "port":     { "durationFrames": 120, "incomeBonus": 15 },
+    "farm":     { "durationFrames": 60,  "incomeBonus": 10 },
+    "walls":    { "durationFrames": 90,  "incomeBonus": 0  }
+  },
+  "limits": {
+    "plains":    { "farm": 20, "port": 3, "barracks": 3, "walls": 2 },
+    "hills":     { "farm": 10, "port": 2, "barracks": 2, "walls": 3 },
+    "mountains": { "farm": 5,  "port": 1, "barracks": 2, "walls": 4 },
+    "forest":    { "farm": 8,  "port": 2, "barracks": 2, "walls": 2 },
+    "desert":    { "farm": 3,  "port": 1, "barracks": 1, "walls": 2 },
+    "tundra":    { "farm": 2,  "port": 1, "barracks": 1, "walls": 2 },
+    "ocean":     { "farm": 0,  "port": 0, "barracks": 0, "walls": 0 }
   }
 }

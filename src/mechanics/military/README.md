@@ -21,12 +21,14 @@ Manages armies. Exposes a function to request army construction via the construc
 |------------|-------------|---------------|
 | `construction:request` | `{ jobId, ownerId, locationId, buildableType: 'army', durationFrames: 60, metadata: {} }` | When `requestBuildArmy` is called |
 | `military:army-raised` | `{ armyId, countryId, provinceId }` | When an army's construction job completes |
+| `military:army-destroyed` | `{ armyId, countryId, provinceId }` | When a province is conquered and the defender's army is removed |
 
 ## Events Consumed
 
 | Event name | Payload type | What the mechanic does with it |
 |------------|-------------|-------------------------------|
 | `construction:complete` | `{ buildableType, ownerId, locationId, completedFrame, ... }` | If `buildableType === 'army'`: creates an `Army` in state and emits `military:army-raised` |
+| `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId }` | Destroys all armies belonging to `oldOwnerId` stationed in `provinceId`; emits `military:army-destroyed` for each |
 
 ## State Slice
 
@@ -51,4 +53,6 @@ interface Army {
 - Army construction is delegated entirely to the construction mechanic. The military mechanic only handles the "what happens when it finishes" side.
 - No update function is needed — the mechanic is purely event-driven.
 - `requestBuildArmy` is a standalone exported function (not a closure) so it can be called directly from UI or AI code without importing internal mechanic state.
-- Combat, movement, and army merging are out of scope for this initial implementation.
+- Army destruction on conquest is purely positional: any army belonging to the old owner in the exact conquered province is removed. Armies in adjacent provinces are unaffected.
+- Multiple armies stacked in the same province are all destroyed together.
+- Movement and army merging are out of scope for this implementation.

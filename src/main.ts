@@ -28,14 +28,20 @@ import {
   initTechnologyMechanic,
   loadTechnologyConfig,
 } from './mechanics/technology/index'
+import {
+  buildEconomyState,
+  initEconomyMechanic,
+  loadEconomyConfig,
+} from './mechanics/economy/index'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
-const [militaryConfig, navyConfig, buildingsConfig, technologyConfig] = await Promise.all([
+const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig] = await Promise.all([
   loadMilitaryConfig(),
   loadNavyConfig(),
   loadBuildingsConfig(),
   loadTechnologyConfig(),
+  loadEconomyConfig(),
 ])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -54,6 +60,7 @@ const stateStore = new StateStore<GameState>({
   navy:         buildNavyState(),
   buildings:    buildBuildingsState(),
   technology:   buildTechnologyState(),
+  economy:      buildEconomyState(),
 })
 const gameLoop = new GameLoop(20)
 
@@ -81,6 +88,9 @@ initMilitaryMechanic(eventBus, stateStore, militaryConfig)
 initNavyMechanic(eventBus, stateStore, navyConfig)
 initBuildingsMechanic(eventBus, stateStore, buildingsConfig)
 initTechnologyMechanic(eventBus, stateStore, technologyConfig)
+
+const economyMechanic = initEconomyMechanic(eventBus, stateStore, economyConfig)
+gameLoop.addUpdateSystem(economyMechanic.update)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -125,12 +135,12 @@ eventBus.on('ai:decision-made', ({ decision }) => {
     const target   = coastals.length > 0
       ? coastals[Math.floor(Math.random() * coastals.length)]
       : provinces[Math.floor(Math.random() * provinces.length)]
-    requestBuildBuilding(eventBus, countryId, target.id, coastals.length > 0 ? 'port' : 'farm', buildingsConfig)
+    requestBuildBuilding(eventBus, stateStore, countryId, target.id, coastals.length > 0 ? 'port' : 'farm', buildingsConfig)
 
   } else if (action === 'ISOLATE') {
     // Build walls in a random province
     const target = provinces[Math.floor(Math.random() * provinces.length)]
-    requestBuildBuilding(eventBus, countryId, target.id, 'walls', buildingsConfig)
+    requestBuildBuilding(eventBus, stateStore, countryId, target.id, 'walls', buildingsConfig)
   }
 })
 
@@ -148,6 +158,15 @@ eventBus.on('buildings:building-constructed', ({ buildingId, countryId, province
 
 eventBus.on('technology:research-completed', ({ technologyId, countryId, technologyType }) => {
   console.debug(`[Technology] ${technologyType} (${technologyId}) researched by ${countryId}`)
+})
+
+eventBus.on('economy:income-collected', ({ countryId, amount }) => {
+  const name = stateStore.getSlice('map').countries[countryId]?.name ?? countryId
+  console.debug(`[Economy] ${name} collected ${amount} gold`)
+})
+
+eventBus.on('buildings:build-rejected', ({ countryId, provinceId, buildingType, reason }) => {
+  console.debug(`[Buildings] ${buildingType} rejected in ${provinceId} for ${countryId}: ${reason}`)
 })
 
 gameLoop.start()

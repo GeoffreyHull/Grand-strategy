@@ -49,7 +49,7 @@ export function initMilitaryMechanic(
   stateStore: StateStore<GameState>,
   config = DEFAULT_MILITARY_CONFIG,
 ): { destroy: () => void } {
-  const sub = eventBus.on('construction:complete', (payload) => {
+  const constructionSub = eventBus.on('construction:complete', (payload) => {
     if (payload.buildableType !== 'army') return
 
     const armyId = crypto.randomUUID() as ArmyId
@@ -73,5 +73,29 @@ export function initMilitaryMechanic(
     })
   })
 
-  return { destroy: () => sub.unsubscribe() }
+  const conquestSub = eventBus.on('map:province-conquered', (payload) => {
+    const { provinceId, oldOwnerId } = payload
+    const armies = stateStore.getSlice('military').armies
+    const destroyed = Object.values(armies).filter(
+      a => a.provinceId === provinceId && a.countryId === oldOwnerId,
+    )
+
+    if (destroyed.length === 0) return
+
+    stateStore.setState(draft => {
+      const next = { ...draft.military.armies }
+      for (const a of destroyed) delete next[a.id]
+      return { ...draft, military: { armies: next } }
+    })
+
+    for (const a of destroyed) {
+      eventBus.emit('military:army-destroyed', {
+        armyId:    a.id,
+        countryId: a.countryId,
+        provinceId,
+      })
+    }
+  })
+
+  return { destroy: () => { constructionSub.unsubscribe(); conquestSub.unsubscribe() } }
 }

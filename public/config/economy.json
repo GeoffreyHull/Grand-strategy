@@ -1,0 +1,13 @@
+{
+  "cycleFrames": 60,
+  "startingGold": 50,
+  "terrainIncome": {
+    "plains":    5,
+    "hills":     3,
+    "mountains": 1,
+    "forest":    4,
+    "desert":    2,
+    "tundra":    1,
+    "ocean":     0
+  }
+}

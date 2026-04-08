@@ -5,6 +5,7 @@ import type { MilitaryState } from './mechanics/military'
 import type { NavyState } from './mechanics/navy'
 import type { BuildingsState } from './mechanics/buildings'
 import type { TechnologyState } from './mechanics/technology'
+import type { EconomyState } from './mechanics/economy'
 
 export interface MapState {
   readonly provinces: Readonly<Record<ProvinceId, Province>>
@@ -23,4 +24,5 @@ export interface GameState {
   readonly navy:         NavyState
   readonly buildings:    BuildingsState
   readonly technology:   TechnologyState
+  readonly economy:      EconomyState
 }

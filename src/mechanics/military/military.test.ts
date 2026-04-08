@@ -178,6 +178,107 @@ describe('initMilitaryMechanic — construction:complete handler', () => {
   })
 })
 
+describe('initMilitaryMechanic — map:province-conquered handler', () => {
+  function raiseArmy(bus: ReturnType<typeof makeMockEventBus>, store: ReturnType<typeof makeStateStore>, provinceId: ProvinceId, countryId: CountryId) {
+    bus.emit('construction:complete', {
+      jobId: crypto.randomUUID() as JobId,
+      ownerId: countryId,
+      locationId: provinceId,
+      buildableType: 'army',
+      completedFrame: 1,
+      metadata: {},
+    })
+  }
+
+  it('removes the defender army when its province is conquered', () => {
+    const bus = makeMockEventBus()
+    const store = makeStateStore()
+    initMilitaryMechanic(bus, store)
+
+    raiseArmy(bus, store, locationId, ownerId)
+    expect(Object.keys(store.getSlice('military').armies)).toHaveLength(1)
+
+    bus.emit('map:province-conquered', {
+      provinceId: locationId,
+      newOwnerId: 'attacker' as CountryId,
+      oldOwnerId: ownerId,
+    })
+
+    expect(Object.keys(store.getSlice('military').armies)).toHaveLength(0)
+  })
+
+  it('emits military:army-destroyed for each destroyed army', () => {
+    const bus = makeMockEventBus()
+    const store = makeStateStore()
+    initMilitaryMechanic(bus, store)
+
+    raiseArmy(bus, store, locationId, ownerId)
+    raiseArmy(bus, store, locationId, ownerId)
+
+    bus.emit('map:province-conquered', {
+      provinceId: locationId,
+      newOwnerId: 'attacker' as CountryId,
+      oldOwnerId: ownerId,
+    })
+
+    const destroyCalls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (c: unknown[]) => c[0] === 'military:army-destroyed',
+    )
+    expect(destroyCalls).toHaveLength(2)
+    for (const call of destroyCalls) {
+      expect(call[1]).toMatchObject({ countryId: ownerId, provinceId: locationId })
+    }
+  })
+
+  it('does not remove armies belonging to the attacker', () => {
+    const bus = makeMockEventBus()
+    const store = makeStateStore()
+    initMilitaryMechanic(bus, store)
+
+    const attackerId = 'attacker' as CountryId
+    raiseArmy(bus, store, locationId, attackerId)
+
+    bus.emit('map:province-conquered', {
+      provinceId: locationId,
+      newOwnerId: attackerId,
+      oldOwnerId: ownerId,
+    })
+
+    expect(Object.keys(store.getSlice('military').armies)).toHaveLength(1)
+  })
+
+  it('does not remove armies in a different province', () => {
+    const bus = makeMockEventBus()
+    const store = makeStateStore()
+    initMilitaryMechanic(bus, store)
+
+    const otherProvince = 'elsewhere' as ProvinceId
+    raiseArmy(bus, store, otherProvince, ownerId)
+
+    bus.emit('map:province-conquered', {
+      provinceId: locationId,
+      newOwnerId: 'attacker' as CountryId,
+      oldOwnerId: ownerId,
+    })
+
+    expect(Object.keys(store.getSlice('military').armies)).toHaveLength(1)
+  })
+
+  it('does nothing when no defender armies are present', () => {
+    const bus = makeMockEventBus()
+    const store = makeStateStore()
+    initMilitaryMechanic(bus, store)
+
+    bus.emit('map:province-conquered', {
+      provinceId: locationId,
+      newOwnerId: 'attacker' as CountryId,
+      oldOwnerId: ownerId,
+    })
+
+    expect(store.setState).not.toHaveBeenCalled()
+  })
+})
+
 describe('initMilitaryMechanic — destroy', () => {
   it('stops responding to construction:complete after destroy', () => {
     const bus = makeMockEventBus()
@@ -191,5 +292,27 @@ describe('initMilitaryMechanic — destroy', () => {
     })
 
     expect(store.setState).not.toHaveBeenCalled()
+  })
+
+  it('stops responding to map:province-conquered after destroy', () => {
+    const bus = makeMockEventBus()
+    const store = makeStateStore()
+    const { destroy } = initMilitaryMechanic(bus, store)
+
+    bus.emit('construction:complete', {
+      jobId: 'j1' as JobId, ownerId, locationId,
+      buildableType: 'army', completedFrame: 1, metadata: {},
+    })
+    destroy()
+
+    const setStateCalls = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
+
+    bus.emit('map:province-conquered', {
+      provinceId: locationId,
+      newOwnerId: 'attacker' as CountryId,
+      oldOwnerId: ownerId,
+    })
+
+    expect((store.setState as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(setStateCalls)
   })
 })

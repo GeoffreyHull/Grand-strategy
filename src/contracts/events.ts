@@ -52,6 +52,11 @@ export interface EventMap {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
   }
+  'military:army-destroyed': {
+    readonly armyId: ArmyId
+    readonly countryId: CountryId
+    readonly provinceId: ProvinceId
+  }
 
   // Navy mechanic events
   'navy:fleet-formed': {

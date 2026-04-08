@@ -34,6 +34,9 @@ Exported from `src/mechanics/map/index.ts`:
 | `map:province-hovered` | `{ provinceId \| null }` | Updates `hoveredProvinceId` in state; refreshes info panel |
 | `map:province-selected` | `{ provinceId, countryId }` | Updates `selectedProvinceId` in state; refreshes info panel |
 | `ai:decision-made` | `{ decision }` | On `EXPAND` action: picks a random neighbouring province of a different country, transfers ownership in state, emits `map:province-conquered` |
+| `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel to show updated army counts |
+| `buildings:building-constructed` | `{ buildingId, ... }` | Refreshes info panel to show updated building list |
+| `map:province-conquered` | `{ provinceId, ... }` | Refreshes info panel to reflect new ownership |
 
 *(The mechanic subscribes to its own events so state flows through a single path.)*
 

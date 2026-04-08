@@ -62,6 +62,20 @@ export function buildMapState(): MapState {
   }
 }
 
+/** Append an entry to the combat log panel. */
+function appendCombatLog(text: string, type: 'conquered' | 'repelled'): void {
+  const list = document.getElementById('combat-log-list')
+  if (!list) return
+  const empty = document.getElementById('combat-log-empty')
+  if (empty) empty.remove()
+  const entry = document.createElement('div')
+  entry.className = `log-entry ${type}`
+  entry.textContent = text
+  list.prepend(entry)
+  // Keep at most 50 entries
+  while (list.children.length > 50) list.removeChild(list.lastChild!)
+}
+
 /** Populate the HTML legend with all 20 countries. */
 function populateLegend(countries: Readonly<Record<CountryId, Country>>): void {
   const list = document.getElementById('legend-list')
@@ -310,6 +324,31 @@ export function initMapMechanic(
         defenseStrength: Math.round(defenseStrength),
       })
     }
+  })
+
+  // Log combat outcomes
+  eventBus.on('map:province-conquered', ({ provinceId, newOwnerId, oldOwnerId }) => {
+    const { provinces, countries } = stateStore.getSlice('map')
+    const province  = provinces[provinceId]
+    const attacker  = countries[newOwnerId]
+    const defender  = countries[oldOwnerId]
+    if (!province || !attacker || !defender) return
+    appendCombatLog(
+      `${attacker.name} captured ${province.name} from ${defender.name}`,
+      'conquered',
+    )
+  })
+
+  eventBus.on('map:province-attack-repelled', ({ provinceId, attackerId, defenderId }) => {
+    const { provinces, countries } = stateStore.getSlice('map')
+    const province = provinces[provinceId]
+    const attacker = countries[attackerId]
+    const defender = countries[defenderId]
+    if (!province || !attacker || !defender) return
+    appendCombatLog(
+      `${defender.name} repelled ${attacker.name}'s attack on ${province.name}`,
+      'repelled',
+    )
   })
 
   // Signal ready

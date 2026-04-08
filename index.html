@@ -84,7 +84,16 @@
       padding: 10px 12px;
       max-height: calc(100vh - 40px);
       overflow-y: auto;
-      pointer-events: none;
+      pointer-events: all;
+    }
+
+    #legend-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
     }
 
     #legend h3 {
@@ -92,9 +101,136 @@
       color: #e8c53a;
       letter-spacing: 1px;
       text-transform: uppercase;
-      margin-bottom: 8px;
-      border-bottom: 1px solid #2a3a5a;
-      padding-bottom: 4px;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    #legend-toggle {
+      font-size: 10px;
+      color: #e8c53a;
+      line-height: 1;
+      transition: transform 0.2s ease;
+    }
+
+    #legend.collapsed #legend-toggle {
+      transform: rotate(-90deg);
+    }
+
+    #legend-body {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 600px;
+      opacity: 1;
+      margin-top: 8px;
+      border-top: 1px solid #2a3a5a;
+      padding-top: 6px;
+    }
+
+    #legend.collapsed #legend-body {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+
+    #combat-log {
+      position: absolute;
+      bottom: 12px; right: 12px;
+      background: rgba(10, 15, 26, 0.88);
+      border: 1px solid #4a6a9a;
+      border-radius: 4px;
+      padding: 10px 12px;
+      width: 260px;
+      pointer-events: all;
+    }
+
+    #combat-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #combat-log h3 {
+      font-size: 11px;
+      color: #e8c53a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0;
+    }
+
+    #combat-log-toggle {
+      font-size: 10px;
+      color: #e8c53a;
+      line-height: 1;
+      transition: transform 0.2s ease;
+    }
+
+    #combat-log.collapsed #combat-log-toggle {
+      transform: rotate(-90deg);
+    }
+
+    #combat-log-body {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 260px;
+      opacity: 1;
+      margin-top: 8px;
+      border-top: 1px solid #2a3a5a;
+      padding-top: 6px;
+    }
+
+    #combat-log.collapsed #combat-log-body {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+
+    #combat-log-list {
+      max-height: 220px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .log-entry {
+      font-size: 10px;
+      line-height: 1.4;
+      padding: 4px 6px;
+      border-radius: 3px;
+      border-left: 2px solid transparent;
+    }
+
+    .log-entry.conquered {
+      color: #d4a84b;
+      border-left-color: #c0392b;
+      background: rgba(192, 57, 43, 0.1);
+    }
+
+    .log-entry.repelled {
+      color: #8ab4c8;
+      border-left-color: #2980b9;
+      background: rgba(41, 128, 185, 0.1);
+    }
+
+    .log-entry .log-turn {
+      color: #6a7a9a;
+      font-size: 9px;
+      display: block;
+      margin-bottom: 1px;
+    }
+
+    #combat-log-empty {
+      font-size: 10px;
+      color: #6a7a9a;
+      font-style: italic;
     }
 
     .legend-item {
@@ -136,10 +272,34 @@
       <p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>
     </div>
     <div id="legend">
-      <h3>Nations</h3>
-      <div id="legend-list"></div>
+      <div id="legend-header">
+        <h3>Nations</h3>
+        <span id="legend-toggle">▼</span>
+      </div>
+      <div id="legend-body">
+        <div id="legend-list"></div>
+      </div>
+    </div>
+    <div id="combat-log">
+      <div id="combat-log-header">
+        <h3>Combat Log</h3>
+        <span id="combat-log-toggle">▼</span>
+      </div>
+      <div id="combat-log-body">
+        <div id="combat-log-list">
+          <span id="combat-log-empty">No battles yet.</span>
+        </div>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
+  <script>
+    document.getElementById('legend-header').addEventListener('click', function() {
+      document.getElementById('legend').classList.toggle('collapsed');
+    });
+    document.getElementById('combat-log-header').addEventListener('click', function() {
+      document.getElementById('combat-log').classList.toggle('collapsed');
+    });
+  </script>
 </body>
 </html>

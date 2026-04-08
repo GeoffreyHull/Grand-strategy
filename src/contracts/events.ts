@@ -46,6 +46,13 @@ export interface EventMap {
     readonly metadata: Readonly<Record<string, unknown>>
   }
 
+  // Economy mechanic events
+  'economy:income-collected': {
+    readonly countryId: CountryId
+    readonly amount: number
+    readonly frame: number
+  }
+
   // Military mechanic events
   'military:army-raised': {
     readonly armyId: ArmyId

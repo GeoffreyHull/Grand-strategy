@@ -1,0 +1,11 @@
+{
+  "cycleFrames": 60,
+  "baseProvinceIncome": 5,
+  "buildingIncome": {
+    "farm": 10,
+    "port": 15,
+    "barracks": 0,
+    "walls": 0
+  },
+  "startingGold": 50
+}

@@ -28,14 +28,20 @@ import {
   initTechnologyMechanic,
   loadTechnologyConfig,
 } from './mechanics/technology/index'
+import {
+  buildEconomyState,
+  initEconomyMechanic,
+  loadEconomyConfig,
+} from './mechanics/economy/index'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
-const [militaryConfig, navyConfig, buildingsConfig, technologyConfig] = await Promise.all([
+const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig] = await Promise.all([
   loadMilitaryConfig(),
   loadNavyConfig(),
   loadBuildingsConfig(),
   loadTechnologyConfig(),
+  loadEconomyConfig(),
 ])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -54,6 +60,7 @@ const stateStore = new StateStore<GameState>({
   navy:         buildNavyState(),
   buildings:    buildBuildingsState(),
   technology:   buildTechnologyState(),
+  economy:      buildEconomyState(),
 })
 const gameLoop = new GameLoop(20)
 
@@ -81,6 +88,9 @@ initMilitaryMechanic(eventBus, stateStore, militaryConfig)
 initNavyMechanic(eventBus, stateStore, navyConfig)
 initBuildingsMechanic(eventBus, stateStore, buildingsConfig)
 initTechnologyMechanic(eventBus, stateStore, technologyConfig)
+
+const economyMechanic = initEconomyMechanic(eventBus, stateStore, economyConfig)
+gameLoop.addUpdateSystem(economyMechanic.update)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -148,6 +158,11 @@ eventBus.on('buildings:building-constructed', ({ buildingId, countryId, province
 
 eventBus.on('technology:research-completed', ({ technologyId, countryId, technologyType }) => {
   console.debug(`[Technology] ${technologyType} (${technologyId}) researched by ${countryId}`)
+})
+
+eventBus.on('economy:income-collected', ({ countryId, amount }) => {
+  const name = stateStore.getSlice('map').countries[countryId]?.name ?? countryId
+  console.debug(`[Economy] ${name} collected ${amount} gold`)
 })
 
 gameLoop.start()

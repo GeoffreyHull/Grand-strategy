@@ -84,7 +84,16 @@
       padding: 10px 12px;
       max-height: calc(100vh - 40px);
       overflow-y: auto;
-      pointer-events: none;
+      pointer-events: all;
+    }
+
+    #legend-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
     }
 
     #legend h3 {
@@ -92,9 +101,38 @@
       color: #e8c53a;
       letter-spacing: 1px;
       text-transform: uppercase;
-      margin-bottom: 8px;
-      border-bottom: 1px solid #2a3a5a;
-      padding-bottom: 4px;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    #legend-toggle {
+      font-size: 10px;
+      color: #e8c53a;
+      line-height: 1;
+      transition: transform 0.2s ease;
+    }
+
+    #legend.collapsed #legend-toggle {
+      transform: rotate(-90deg);
+    }
+
+    #legend-body {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 600px;
+      opacity: 1;
+      margin-top: 8px;
+      border-top: 1px solid #2a3a5a;
+      padding-top: 6px;
+    }
+
+    #legend.collapsed #legend-body {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
     }
 
     .legend-item {
@@ -136,10 +174,20 @@
       <p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>
     </div>
     <div id="legend">
-      <h3>Nations</h3>
-      <div id="legend-list"></div>
+      <div id="legend-header">
+        <h3>Nations</h3>
+        <span id="legend-toggle">▼</span>
+      </div>
+      <div id="legend-body">
+        <div id="legend-list"></div>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
+  <script>
+    document.getElementById('legend-header').addEventListener('click', function() {
+      document.getElementById('legend').classList.toggle('collapsed');
+    });
+  </script>
 </body>
 </html>

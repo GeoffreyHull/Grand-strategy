@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildEconomyState, initEconomyMechanic } from './index'
-import { computeCountryIncome, DEFAULT_ECONOMY_CONFIG, validateEconomyConfig } from './types'
+import { computeProvinceIncome, DEFAULT_ECONOMY_CONFIG, validateEconomyConfig } from './types'
 import type { EventBus } from '../../engine/EventBus'
 import type { StateStore } from '../../engine/StateStore'
 import type { TickContext } from '../../engine/GameLoop'
 import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
 import type { CountryId, ProvinceId, Province, Country } from '@contracts/mechanics/map'
-import type { Building, BuildingId, BuildingType } from '@contracts/mechanics/buildings'
+import type { IncomeModifier } from '@contracts/mechanics/economy'
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -35,54 +35,30 @@ function makeMockEventBus() {
     EventBus<EventMap> & { emit: typeof emit; on: typeof on }
 }
 
-function makeProvince(id: string, countryId: string, isCoastal = false): Province {
+function makeProvince(id: string, countryId: string, terrainType: Province['terrainType'] = 'plains'): Province {
+  return { id: id as ProvinceId, name: id, countryId: countryId as CountryId, cells: [], isCoastal: false, terrainType }
+}
+
+function makeCountry(id: string, provinces: string[]): Country {
   return {
-    id:          id as ProvinceId,
-    name:        id,
-    countryId:   countryId as CountryId,
-    cells:       [],
-    isCoastal,
-    terrainType: 'plains',
+    id:               id as CountryId,
+    name:             id,
+    color:            '#000',
+    provinceIds:      provinces as ProvinceId[],
+    capitalProvinceId: provinces[0] as ProvinceId,
   }
 }
 
-function makeBuilding(id: string, provinceId: string, buildingType: BuildingType, countryId = 'builder'): Building {
-  return {
-    id:            id as BuildingId,
-    countryId:     countryId as CountryId,
-    provinceId:    provinceId as ProvinceId,
-    buildingType,
-    completedFrame: 1,
-  }
-}
-
-function makeStateStore(provinces: Province[] = [], buildings: Building[] = []) {
+function makeStateStore(provinces: Province[] = []) {
   const provinceMap = Object.fromEntries(provinces.map(p => [p.id, p])) as Record<ProvinceId, Province>
-  const countryIds = [...new Set(provinces.map(p => p.countryId))]
-  const countryMap = Object.fromEntries(
-    countryIds.map(cId => [
-      cId,
-      {
-        id:               cId,
-        name:             cId,
-        color:            '#000',
-        provinceIds:      provinces.filter(p => p.countryId === cId).map(p => p.id),
-        capitalProvinceId: provinces.find(p => p.countryId === cId)?.id ?? cId,
-      } as Country,
-    ]),
+  const countryIds  = [...new Set(provinces.map(p => p.countryId))]
+  const countryMap  = Object.fromEntries(
+    countryIds.map(cId => [cId, makeCountry(cId, provinces.filter(p => p.countryId === cId).map(p => p.id))]),
   ) as Record<CountryId, Country>
 
-  const buildingMap = Object.fromEntries(buildings.map(b => [b.id, b])) as Record<BuildingId, Building>
-
   let state: GameState = {
-    map: {
-      provinces: provinceMap,
-      countries: countryMap,
-      selectedProvinceId: null,
-      hoveredProvinceId:  null,
-      cellIndex:          {},
-    },
-    buildings: { buildings: buildingMap },
+    map: { provinces: provinceMap, countries: countryMap, selectedProvinceId: null, hoveredProvinceId: null, cellIndex: {} },
+    buildings: { buildings: {} },
     economy:   buildEconomyState(),
   } as unknown as GameState
 
@@ -94,370 +70,443 @@ function makeStateStore(provinces: Province[] = [], buildings: Building[] = []) 
   } as unknown as StateStore<GameState>
 }
 
-const countryA = 'country-a' as CountryId
-const countryB = 'country-b' as CountryId
-const provA1   = 'prov-a1' as ProvinceId
-const provA2   = 'prov-a2' as ProvinceId
-const provB1   = 'prov-b1' as ProvinceId
-
 function tick(frame: number): TickContext {
   return { frame, deltaMs: 50, totalMs: frame * 50 }
 }
 
-// ── computeCountryIncome ──────────────────────────────────────────────────────
+const cA = 'country-a' as CountryId
+const cB = 'country-b' as CountryId
+const pA1 = 'prov-a1' as ProvinceId
+const pA2 = 'prov-a2' as ProvinceId
+const pB1 = 'prov-b1' as ProvinceId
 
-describe('computeCountryIncome', () => {
-  it('returns 0 for a country with no provinces', () => {
-    const result = computeCountryIncome(countryA, {}, {}, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(0)
+function flatMod(id: string, value: number, label = 'test', buildingType?: string): IncomeModifier {
+  return { id, op: 'add', value, label, buildingType }
+}
+function multiplyMod(id: string, value: number, label = 'test', condition?: IncomeModifier['condition']): IncomeModifier {
+  return { id, op: 'multiply', value, label, condition }
+}
+
+// ── computeProvinceIncome ─────────────────────────────────────────────────────
+
+describe('computeProvinceIncome', () => {
+  it('returns base income when there are no modifiers', () => {
+    expect(computeProvinceIncome(5, [], [])).toBe(5)
   })
 
-  it('returns base income per owned province', () => {
-    const provinces = {
-      [provA1]: makeProvince(provA1, countryA),
-      [provA2]: makeProvince(provA2, countryA),
-    } as Record<ProvinceId, Province>
-    const result = computeCountryIncome(countryA, provinces, {}, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(DEFAULT_ECONOMY_CONFIG.baseProvinceIncome * 2)
+  it('adds flat province modifiers to base', () => {
+    expect(computeProvinceIncome(5, [flatMod('f1', 10)], [])).toBe(15)
   })
 
-  it('does not count provinces owned by another country', () => {
-    const provinces = {
-      [provB1]: makeProvince(provB1, countryB),
-    } as Record<ProvinceId, Province>
-    const result = computeCountryIncome(countryA, provinces, {}, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(0)
+  it('stacks multiple flat modifiers', () => {
+    expect(computeProvinceIncome(5, [flatMod('f1', 10), flatMod('f2', 10)], [])).toBe(25)
   })
 
-  it('adds farm bonus for a farm in an owned province', () => {
-    const provinces = { [provA1]: makeProvince(provA1, countryA) } as Record<ProvinceId, Province>
-    const buildings = { farm1: makeBuilding('farm1', provA1, 'farm') } as Record<BuildingId, Building>
-    const base = DEFAULT_ECONOMY_CONFIG.baseProvinceIncome
-    const result = computeCountryIncome(countryA, provinces, buildings, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(base + DEFAULT_ECONOMY_CONFIG.buildingIncome.farm)
+  it('applies a multiply modifier after flat adds', () => {
+    // (5 + 10) × 1.10 = 16.5
+    expect(computeProvinceIncome(5, [flatMod('f1', 10)], [multiplyMod('m1', 1.10)])).toBeCloseTo(16.5)
   })
 
-  it('adds port bonus for a port in an owned province', () => {
-    const provinces = { [provA1]: makeProvince(provA1, countryA, true) } as Record<ProvinceId, Province>
-    const buildings = { port1: makeBuilding('port1', provA1, 'port') } as Record<BuildingId, Building>
-    const base = DEFAULT_ECONOMY_CONFIG.baseProvinceIncome
-    const result = computeCountryIncome(countryA, provinces, buildings, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(base + DEFAULT_ECONOMY_CONFIG.buildingIncome.port)
+  it('stacks multiple multiply modifiers', () => {
+    // (5) × 1.10 × 1.05 = 5.775
+    expect(computeProvinceIncome(5, [], [multiplyMod('m1', 1.10), multiplyMod('m2', 1.05)])).toBeCloseTo(5.775)
   })
 
-  it('barracks and walls add 0 income', () => {
-    const provinces = { [provA1]: makeProvince(provA1, countryA) } as Record<ProvinceId, Province>
-    const buildings = {
-      b1: makeBuilding('b1', provA1, 'barracks'),
-      b2: makeBuilding('b2', provA1, 'walls'),
-    } as Record<BuildingId, Building>
-    const base = DEFAULT_ECONOMY_CONFIG.baseProvinceIncome
-    const result = computeCountryIncome(countryA, provinces, buildings, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(base)
+  it('applies owner modifier without condition unconditionally', () => {
+    expect(computeProvinceIncome(5, [], [flatMod('o1', 3)])).toBe(8)
   })
 
-  it('does not count a building in an enemy-owned province', () => {
-    const provinces = { [provB1]: makeProvince(provB1, countryB) } as Record<ProvinceId, Province>
-    const buildings = { farm1: makeBuilding('farm1', provB1, 'farm', countryA) } as Record<BuildingId, Building>
-    const result = computeCountryIncome(countryA, provinces, buildings, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(0)
+  it('applies conditional owner modifier when building is present', () => {
+    const farmMod   = flatMod('farm-id', 10, 'Farm', 'farm')
+    const techMod   = multiplyMod('tech-1', 1.10, 'Efficient Farming', { type: 'hasBuilding', buildingType: 'farm' })
+    // (5 + 10) × 1.10 = 16.5
+    expect(computeProvinceIncome(5, [farmMod], [techMod])).toBeCloseTo(16.5)
   })
 
-  it('counts a captured building (built by enemy) in an owned province', () => {
-    // Province now owned by countryA but building.countryId is countryB (original builder)
-    const provinces = { [provA1]: makeProvince(provA1, countryA) } as Record<ProvinceId, Province>
-    const buildings = { farm1: makeBuilding('farm1', provA1, 'farm', countryB) } as Record<BuildingId, Building>
-    const base = DEFAULT_ECONOMY_CONFIG.baseProvinceIncome
-    const result = computeCountryIncome(countryA, provinces, buildings, DEFAULT_ECONOMY_CONFIG)
-    expect(result).toBe(base + DEFAULT_ECONOMY_CONFIG.buildingIncome.farm)
+  it('does NOT apply conditional owner modifier when building is absent', () => {
+    const techMod = multiplyMod('tech-1', 1.10, 'Efficient Farming', { type: 'hasBuilding', buildingType: 'farm' })
+    expect(computeProvinceIncome(5, [], [techMod])).toBe(5)
+  })
+
+  it('base 0 with multiplier stays 0', () => {
+    expect(computeProvinceIncome(0, [], [multiplyMod('m1', 2)])).toBe(0)
   })
 })
 
 // ── validateEconomyConfig ─────────────────────────────────────────────────────
 
 describe('validateEconomyConfig', () => {
-  const VALID = {
-    cycleFrames: 60,
-    baseProvinceIncome: 5,
-    startingGold: 50,
-    buildingIncome: { farm: 10, port: 15, barracks: 0, walls: 0 },
-  }
+  const VALID = { cycleFrames: 60, startingGold: 50, terrainIncome: { plains: 5, hills: 3 } }
 
   it('accepts a valid config', () => {
-    expect(validateEconomyConfig(VALID)).toMatchObject(VALID)
-  })
-
-  it('throws when cycleFrames is missing', () => {
-    expect(() => validateEconomyConfig({ ...VALID, cycleFrames: undefined })).toThrow('economy.cycleFrames')
+    expect(validateEconomyConfig(VALID)).toMatchObject({ cycleFrames: 60, startingGold: 50 })
   })
 
   it('throws when cycleFrames is zero', () => {
     expect(() => validateEconomyConfig({ ...VALID, cycleFrames: 0 })).toThrow('economy.cycleFrames')
   })
 
-  it('throws when baseProvinceIncome is negative', () => {
-    expect(() => validateEconomyConfig({ ...VALID, baseProvinceIncome: -1 })).toThrow('economy.baseProvinceIncome')
-  })
-
   it('throws when startingGold is negative', () => {
     expect(() => validateEconomyConfig({ ...VALID, startingGold: -1 })).toThrow('economy.startingGold')
   })
 
-  it('throws when buildingIncome is missing', () => {
-    const { buildingIncome: _, ...rest } = VALID
-    expect(() => validateEconomyConfig(rest)).toThrow('economy.buildingIncome')
+  it('throws when terrainIncome is missing', () => {
+    const { terrainIncome: _, ...rest } = VALID
+    expect(() => validateEconomyConfig(rest)).toThrow('economy.terrainIncome')
   })
 
-  it('throws when farm income is negative', () => {
-    expect(() => validateEconomyConfig({ ...VALID, buildingIncome: { ...VALID.buildingIncome, farm: -1 } }))
-      .toThrow('economy.buildingIncome.farm')
+  it('throws when a terrain income value is negative', () => {
+    expect(() => validateEconomyConfig({ ...VALID, terrainIncome: { plains: -1 } })).toThrow('economy.terrainIncome.plains')
   })
 })
 
 // ── buildEconomyState ─────────────────────────────────────────────────────────
 
 describe('buildEconomyState', () => {
-  it('starts with an empty countries record', () => {
-    expect(buildEconomyState()).toEqual({ countries: {} })
+  it('starts with empty provinces and countries', () => {
+    expect(buildEconomyState()).toEqual({ provinces: {}, countries: {} })
   })
 })
 
-// ── initEconomyMechanic ───────────────────────────────────────────────────────
+// ── initEconomyMechanic — initialisation ──────────────────────────────────────
 
-describe('initEconomyMechanic — initialization', () => {
-  it('initializes a CountryEconomy entry for each country in map state', () => {
+describe('initEconomyMechanic — initialisation', () => {
+  it('creates a ProvinceEconomy entry for each province', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([
-      makeProvince(provA1, countryA),
-      makeProvince(provB1, countryB),
-    ])
+    const store = makeStateStore([makeProvince(pA1, cA), makeProvince(pB1, cB)])
     initEconomyMechanic(bus, store)
+    expect(store.getSlice('economy').provinces[pA1]).toBeDefined()
+    expect(store.getSlice('economy').provinces[pB1]).toBeDefined()
+  })
 
-    const eco = store.getSlice('economy')
-    expect(eco.countries[countryA]).toBeDefined()
-    expect(eco.countries[countryB]).toBeDefined()
+  it('sets baseIncome from terrainIncome config', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
+    initEconomyMechanic(bus, store)
+    expect(store.getSlice('economy').provinces[pA1].baseIncome).toBe(DEFAULT_ECONOMY_CONFIG.terrainIncome['plains'])
+  })
+
+  it('sets currentIncome to baseIncome with no modifiers', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'mountains')])
+    initEconomyMechanic(bus, store)
+    const { baseIncome, currentIncome } = store.getSlice('economy').provinces[pA1]
+    expect(currentIncome).toBe(baseIncome)
+  })
+
+  it('creates a CountryEconomy entry for each country', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA)])
+    initEconomyMechanic(bus, store)
+    expect(store.getSlice('economy').countries[cA]).toBeDefined()
   })
 
   it('sets starting gold from config', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA)])
     initEconomyMechanic(bus, store)
-
-    expect(store.getSlice('economy').countries[countryA].gold).toBe(DEFAULT_ECONOMY_CONFIG.startingGold)
+    expect(store.getSlice('economy').countries[cA].gold).toBe(DEFAULT_ECONOMY_CONFIG.startingGold)
   })
 
-  it('computes incomePerCycle as base province income on startup', () => {
+  it('starts with empty province and owner modifier lists', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([
-      makeProvince(provA1, countryA),
-      makeProvince(provA2, countryA),
-    ])
+    const store = makeStateStore([makeProvince(pA1, cA)])
     initEconomyMechanic(bus, store)
-
-    const expected = DEFAULT_ECONOMY_CONFIG.baseProvinceIncome * 2
-    expect(store.getSlice('economy').countries[countryA].incomePerCycle).toBe(expected)
-  })
-
-  it('includes building bonuses in initial income', () => {
-    const bus   = makeMockEventBus()
-    const store = makeStateStore(
-      [makeProvince(provA1, countryA)],
-      [makeBuilding('farm1', provA1, 'farm')],
-    )
-    initEconomyMechanic(bus, store)
-
-    const expected = DEFAULT_ECONOMY_CONFIG.baseProvinceIncome + DEFAULT_ECONOMY_CONFIG.buildingIncome.farm
-    expect(store.getSlice('economy').countries[countryA].incomePerCycle).toBe(expected)
+    expect(store.getSlice('economy').provinces[pA1].provinceModifiers).toHaveLength(0)
+    expect(store.getSlice('economy').countries[cA].modifiers).toHaveLength(0)
   })
 })
 
-describe('initEconomyMechanic — update', () => {
-  it('adds incomePerCycle to gold at cycle boundaries', () => {
+// ── economy:province-modifier-added ──────────────────────────────────────────
+
+describe('initEconomyMechanic — economy:province-modifier-added', () => {
+  it('adds the modifier to province modifiers', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
-    const { update } = initEconomyMechanic(bus, store)
+    const store = makeStateStore([makeProvince(pA1, cA)])
+    initEconomyMechanic(bus, store)
 
-    const beforeGold = store.getSlice('economy').countries[countryA].gold
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
-    const afterGold  = store.getSlice('economy').countries[countryA].gold
+    bus.emit('economy:province-modifier-added', { provinceId: pA1, modifier: flatMod('farm-1', 10, 'Farm', 'farm') })
 
-    expect(afterGold).toBe(beforeGold + DEFAULT_ECONOMY_CONFIG.baseProvinceIncome)
+    expect(store.getSlice('economy').provinces[pA1].provinceModifiers).toHaveLength(1)
   })
 
-  it('does not change gold on non-cycle frames', () => {
+  it('updates currentIncome to include the new flat modifier', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
+    initEconomyMechanic(bus, store)
+
+    const base = store.getSlice('economy').provinces[pA1].baseIncome
+    bus.emit('economy:province-modifier-added', { provinceId: pA1, modifier: flatMod('farm-1', 10, 'Farm', 'farm') })
+
+    expect(store.getSlice('economy').provinces[pA1].currentIncome).toBe(base + 10)
+  })
+
+  it('applies conditional owner modifier after farm is added', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
+    initEconomyMechanic(bus, store)
+
+    // Add tech modifier first (condition: hasBuilding farm) — shouldn't apply yet
+    bus.emit('economy:owner-modifier-added', {
+      countryId: cA,
+      modifier:  multiplyMod('tech-1', 1.10, 'Efficient Farming', { type: 'hasBuilding', buildingType: 'farm' }),
+    })
+    const incomeBeforeFarm = store.getSlice('economy').provinces[pA1].currentIncome
+
+    // Now add farm — condition is now met
+    bus.emit('economy:province-modifier-added', { provinceId: pA1, modifier: flatMod('farm-1', 10, 'Farm', 'farm') })
+
+    const incomeAfterFarm  = store.getSlice('economy').provinces[pA1].currentIncome
+    const base = store.getSlice('economy').provinces[pA1].baseIncome
+    // (base + 10) × 1.10
+    expect(incomeAfterFarm).toBeCloseTo((base + 10) * 1.10)
+    expect(incomeAfterFarm).toBeGreaterThan(incomeBeforeFarm)
+  })
+})
+
+// ── economy:province-modifier-removed ────────────────────────────────────────
+
+describe('initEconomyMechanic — economy:province-modifier-removed', () => {
+  it('removes the modifier from province modifiers', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA)])
+    initEconomyMechanic(bus, store)
+
+    bus.emit('economy:province-modifier-added',   { provinceId: pA1, modifier: flatMod('farm-1', 10, 'Farm', 'farm') })
+    bus.emit('economy:province-modifier-removed',  { provinceId: pA1, modifierId: 'farm-1' })
+
+    expect(store.getSlice('economy').provinces[pA1].provinceModifiers).toHaveLength(0)
+  })
+
+  it('recalculates currentIncome after removal', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
+    initEconomyMechanic(bus, store)
+
+    const base = store.getSlice('economy').provinces[pA1].baseIncome
+    bus.emit('economy:province-modifier-added',   { provinceId: pA1, modifier: flatMod('farm-1', 10, 'Farm', 'farm') })
+    bus.emit('economy:province-modifier-removed',  { provinceId: pA1, modifierId: 'farm-1' })
+
+    expect(store.getSlice('economy').provinces[pA1].currentIncome).toBe(base)
+  })
+})
+
+// ── economy:owner-modifier-added ──────────────────────────────────────────────
+
+describe('initEconomyMechanic — economy:owner-modifier-added', () => {
+  it('adds the modifier to the country modifiers list', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA)])
+    initEconomyMechanic(bus, store)
+
+    bus.emit('economy:owner-modifier-added', { countryId: cA, modifier: multiplyMod('tech-1', 1.10, 'Tech') })
+
+    expect(store.getSlice('economy').countries[cA].modifiers).toHaveLength(1)
+  })
+
+  it('recomputes all owned provinces when an unconditional owner modifier is added', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains'), makeProvince(pA2, cA, 'hills')])
+    initEconomyMechanic(bus, store)
+
+    const baseA1 = store.getSlice('economy').provinces[pA1].baseIncome
+    const baseA2 = store.getSlice('economy').provinces[pA2].baseIncome
+
+    bus.emit('economy:owner-modifier-added', { countryId: cA, modifier: multiplyMod('tech-1', 2) })
+
+    expect(store.getSlice('economy').provinces[pA1].currentIncome).toBe(baseA1 * 2)
+    expect(store.getSlice('economy').provinces[pA2].currentIncome).toBe(baseA2 * 2)
+  })
+
+  it('does not affect provinces owned by a different country', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA), makeProvince(pB1, cB, 'plains')])
+    initEconomyMechanic(bus, store)
+
+    const bBefore = store.getSlice('economy').provinces[pB1].currentIncome
+    bus.emit('economy:owner-modifier-added', { countryId: cA, modifier: multiplyMod('tech-1', 2) })
+
+    expect(store.getSlice('economy').provinces[pB1].currentIncome).toBe(bBefore)
+  })
+
+  it('conditional modifier does not apply to provinces without the required building', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
+    initEconomyMechanic(bus, store)
+
+    const base = store.getSlice('economy').provinces[pA1].baseIncome
+    bus.emit('economy:owner-modifier-added', {
+      countryId: cA,
+      modifier:  multiplyMod('tech-1', 1.10, 'Efficient Farming', { type: 'hasBuilding', buildingType: 'farm' }),
+    })
+
+    expect(store.getSlice('economy').provinces[pA1].currentIncome).toBe(base)
+  })
+})
+
+// ── economy:owner-modifier-removed ───────────────────────────────────────────
+
+describe('initEconomyMechanic — economy:owner-modifier-removed', () => {
+  it('removes modifier from country and recomputes provinces', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
+    initEconomyMechanic(bus, store)
+
+    const base = store.getSlice('economy').provinces[pA1].baseIncome
+    bus.emit('economy:owner-modifier-added',   { countryId: cA, modifier: multiplyMod('tech-1', 2) })
+    bus.emit('economy:owner-modifier-removed', { countryId: cA, modifierId: 'tech-1' })
+
+    expect(store.getSlice('economy').countries[cA].modifiers).toHaveLength(0)
+    expect(store.getSlice('economy').provinces[pA1].currentIncome).toBe(base)
+  })
+})
+
+// ── map:province-conquered ────────────────────────────────────────────────────
+
+describe('initEconomyMechanic — map:province-conquered', () => {
+  it('recomputes the conquered province with the new owner\'s modifiers', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains'), makeProvince(pB1, cB)])
+    initEconomyMechanic(bus, store)
+
+    // Country B has a ×2 multiplier; Country A does not
+    bus.emit('economy:owner-modifier-added', { countryId: cB, modifier: multiplyMod('tech-b', 2) })
+
+    // Simulate conquest: pA1 changes owner to cB in map state
+    store.setState(draft => ({
+      ...draft,
+      map: { ...draft.map, provinces: { ...draft.map.provinces, [pA1]: { ...draft.map.provinces[pA1], countryId: cB } } },
+    }))
+
+    bus.emit('map:province-conquered', { provinceId: pA1, newOwnerId: cB, oldOwnerId: cA })
+
+    const base = store.getSlice('economy').provinces[pA1].baseIncome
+    expect(store.getSlice('economy').provinces[pA1].currentIncome).toBe(base * 2)
+  })
+
+  it('province modifiers (buildings) are preserved after conquest', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains'), makeProvince(pB1, cB)])
+    initEconomyMechanic(bus, store)
+
+    bus.emit('economy:province-modifier-added', { provinceId: pA1, modifier: flatMod('farm-1', 10, 'Farm', 'farm') })
+    store.setState(draft => ({
+      ...draft,
+      map: { ...draft.map, provinces: { ...draft.map.provinces, [pA1]: { ...draft.map.provinces[pA1], countryId: cB } } },
+    }))
+    bus.emit('map:province-conquered', { provinceId: pA1, newOwnerId: cB, oldOwnerId: cA })
+
+    expect(store.getSlice('economy').provinces[pA1].provinceModifiers).toHaveLength(1)
+  })
+})
+
+// ── update — income tick ──────────────────────────────────────────────────────
+
+describe('initEconomyMechanic — update', () => {
+  it('adds province income to country gold at a cycle boundary', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
-    const beforeGold = store.getSlice('economy').countries[countryA].gold
+    const startGold = store.getSlice('economy').countries[cA].gold
+    const income    = store.getSlice('economy').provinces[pA1].currentIncome
+    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
+
+    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + income)
+  })
+
+  it('does not change gold at non-cycle frames', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA)])
+    const { update } = initEconomyMechanic(bus, store)
+
+    const startGold = store.getSlice('economy').countries[cA].gold
     update(tick(1))
     update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames - 1))
-    expect(store.getSlice('economy').countries[countryA].gold).toBe(beforeGold)
+    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold)
   })
 
   it('does not change gold at frame 0', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA)])
     const { update } = initEconomyMechanic(bus, store)
 
-    const beforeGold = store.getSlice('economy').countries[countryA].gold
+    const startGold = store.getSlice('economy').countries[cA].gold
     update(tick(0))
-    expect(store.getSlice('economy').countries[countryA].gold).toBe(beforeGold)
+    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold)
   })
 
-  it('emits economy:income-collected with correct fields at cycle boundary', () => {
+  it('aggregates income from all owned provinces', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains'), makeProvince(pA2, cA, 'hills')])
+    const { update } = initEconomyMechanic(bus, store)
+
+    const startGold  = store.getSlice('economy').countries[cA].gold
+    const incA1      = store.getSlice('economy').provinces[pA1].currentIncome
+    const incA2      = store.getSlice('economy').provinces[pA2].currentIncome
+    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
+
+    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + incA1 + incA2)
+  })
+
+  it('emits economy:income-collected per country with positive income', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
     update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
 
     expect(bus.emit).toHaveBeenCalledWith('economy:income-collected', expect.objectContaining({
-      countryId: countryA,
-      amount:    DEFAULT_ECONOMY_CONFIG.baseProvinceIncome,
+      countryId: cA,
       frame:     DEFAULT_ECONOMY_CONFIG.cycleFrames,
     }))
   })
 
-  it('does not emit economy:income-collected for a country with 0 income', () => {
+  it('gold accumulates over multiple cycles', () => {
     const bus   = makeMockEventBus()
-    // country with no provinces → 0 income
-    const store = makeStateStore([makeProvince(provA1, countryA)])
-    // We'll test countryB which isn't in map — so it never gets initialized
-    // Instead test directly: country with zero income via custom config
-    const zeroConfig = { ...DEFAULT_ECONOMY_CONFIG, baseProvinceIncome: 0, buildingIncome: { farm: 0, port: 0, barracks: 0, walls: 0 } }
-    const { update } = initEconomyMechanic(bus, store, zeroConfig)
-
-    update(tick(zeroConfig.cycleFrames))
-
-    const incomeCalls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c: unknown[]) => c[0] === 'economy:income-collected',
-    )
-    expect(incomeCalls).toHaveLength(0)
-  })
-
-  it('gold accumulates correctly over multiple cycles', () => {
-    const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
-    const startGold = store.getSlice('economy').countries[countryA].gold
+    const startGold = store.getSlice('economy').countries[cA].gold
+    const income    = store.getSlice('economy').provinces[pA1].currentIncome
     update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
     update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames * 2))
     update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames * 3))
 
-    const expected = startGold + DEFAULT_ECONOMY_CONFIG.baseProvinceIncome * 3
-    expect(store.getSlice('economy').countries[countryA].gold).toBe(expected)
+    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + income * 3)
   })
 })
 
-describe('initEconomyMechanic — buildings:building-constructed handler', () => {
-  it('recomputes income when a building is constructed', () => {
-    const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
-    initEconomyMechanic(bus, store)
-
-    const incomeBefore = store.getSlice('economy').countries[countryA].incomePerCycle
-
-    // Add farm to state, then fire the event
-    store.setState(draft => ({
-      ...draft,
-      buildings: {
-        buildings: {
-          ...draft.buildings.buildings,
-          ['farm1' as BuildingId]: makeBuilding('farm1', provA1, 'farm'),
-        },
-      },
-    }))
-
-    bus.emit('buildings:building-constructed', {
-      buildingId:   'farm1' as BuildingId,
-      countryId:    countryA,
-      provinceId:   provA1,
-      buildingType: 'farm',
-    })
-
-    const incomeAfter = store.getSlice('economy').countries[countryA].incomePerCycle
-    expect(incomeAfter).toBe(incomeBefore + DEFAULT_ECONOMY_CONFIG.buildingIncome.farm)
-  })
-})
-
-describe('initEconomyMechanic — map:province-conquered handler', () => {
-  it('recomputes income for both countries when a province changes hands', () => {
-    const bus   = makeMockEventBus()
-    const store = makeStateStore([
-      makeProvince(provA1, countryA),
-      makeProvince(provB1, countryB),
-    ])
-    initEconomyMechanic(bus, store)
-
-    const incomeABefore = store.getSlice('economy').countries[countryA].incomePerCycle
-    const incomeBBefore = store.getSlice('economy').countries[countryB].incomePerCycle
-
-    // Transfer provB1 from countryB to countryA in state
-    store.setState(draft => ({
-      ...draft,
-      map: {
-        ...draft.map,
-        provinces: {
-          ...draft.map.provinces,
-          [provB1]: { ...draft.map.provinces[provB1], countryId: countryA },
-        },
-      },
-    }))
-
-    bus.emit('map:province-conquered', {
-      provinceId:  provB1,
-      newOwnerId:  countryA,
-      oldOwnerId:  countryB,
-    })
-
-    const incomeAAfter = store.getSlice('economy').countries[countryA].incomePerCycle
-    const incomeBAfter = store.getSlice('economy').countries[countryB].incomePerCycle
-
-    expect(incomeAAfter).toBeGreaterThan(incomeABefore)
-    expect(incomeBAfter).toBeLessThan(incomeBBefore)
-  })
-})
+// ── destroy ───────────────────────────────────────────────────────────────────
 
 describe('initEconomyMechanic — destroy', () => {
-  it('stops responding to buildings:building-constructed after destroy', () => {
+  it('stops responding to economy:province-modifier-added', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA)])
     const { destroy } = initEconomyMechanic(bus, store)
-
-    const setStateCalls = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
+    const callsBefore = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
     destroy()
-
-    store.setState(draft => ({
-      ...draft,
-      buildings: {
-        buildings: {
-          ...draft.buildings.buildings,
-          ['farm1' as BuildingId]: makeBuilding('farm1', provA1, 'farm'),
-        },
-      },
-    }))
-    bus.emit('buildings:building-constructed', {
-      buildingId: 'farm1' as BuildingId, countryId: countryA, provinceId: provA1, buildingType: 'farm',
-    })
-
-    // Only the setState calls before destroy plus the one we made manually above
-    expect((store.setState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(setStateCalls + 1)
+    bus.emit('economy:province-modifier-added', { provinceId: pA1, modifier: flatMod('f1', 10) })
+    expect((store.setState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore)
   })
 
-  it('stops responding to map:province-conquered after destroy', () => {
+  it('stops responding to economy:owner-modifier-added', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(provA1, countryA)])
+    const store = makeStateStore([makeProvince(pA1, cA)])
     const { destroy } = initEconomyMechanic(bus, store)
-
-    const setStateCalls = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
+    const callsBefore = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
     destroy()
+    bus.emit('economy:owner-modifier-added', { countryId: cA, modifier: multiplyMod('m1', 2) })
+    expect((store.setState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore)
+  })
 
-    bus.emit('map:province-conquered', {
-      provinceId: provA1, newOwnerId: countryB, oldOwnerId: countryA,
-    })
-
-    expect((store.setState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(setStateCalls)
+  it('stops responding to map:province-conquered', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([makeProvince(pA1, cA), makeProvince(pB1, cB)])
+    const { destroy } = initEconomyMechanic(bus, store)
+    const callsBefore = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
+    destroy()
+    bus.emit('map:province-conquered', { provinceId: pA1, newOwnerId: cB, oldOwnerId: cA })
+    expect((store.setState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore)
   })
 })

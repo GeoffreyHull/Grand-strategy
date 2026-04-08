@@ -135,12 +135,12 @@ eventBus.on('ai:decision-made', ({ decision }) => {
     const target   = coastals.length > 0
       ? coastals[Math.floor(Math.random() * coastals.length)]
       : provinces[Math.floor(Math.random() * provinces.length)]
-    requestBuildBuilding(eventBus, countryId, target.id, coastals.length > 0 ? 'port' : 'farm', buildingsConfig)
+    requestBuildBuilding(eventBus, stateStore, countryId, target.id, coastals.length > 0 ? 'port' : 'farm', buildingsConfig)
 
   } else if (action === 'ISOLATE') {
     // Build walls in a random province
     const target = provinces[Math.floor(Math.random() * provinces.length)]
-    requestBuildBuilding(eventBus, countryId, target.id, 'walls', buildingsConfig)
+    requestBuildBuilding(eventBus, stateStore, countryId, target.id, 'walls', buildingsConfig)
   }
 })
 
@@ -163,6 +163,10 @@ eventBus.on('technology:research-completed', ({ technologyId, countryId, technol
 eventBus.on('economy:income-collected', ({ countryId, amount }) => {
   const name = stateStore.getSlice('map').countries[countryId]?.name ?? countryId
   console.debug(`[Economy] ${name} collected ${amount} gold`)
+})
+
+eventBus.on('buildings:build-rejected', ({ countryId, provinceId, buildingType, reason }) => {
+  console.debug(`[Buildings] ${buildingType} rejected in ${provinceId} for ${countryId}: ${reason}`)
 })
 
 gameLoop.start()

@@ -5,6 +5,7 @@ import type { ArmyId } from './mechanics/military'
 import type { FleetId } from './mechanics/navy'
 import type { BuildingId, BuildingType } from './mechanics/buildings'
 import type { TechnologyId, TechnologyType } from './mechanics/technology'
+import type { IncomeModifier } from './mechanics/economy'
 
 export interface EventMap {
   // Map mechanic events
@@ -52,6 +53,22 @@ export interface EventMap {
     readonly amount: number
     readonly frame: number
   }
+  'economy:province-modifier-added': {
+    readonly provinceId: ProvinceId
+    readonly modifier: IncomeModifier
+  }
+  'economy:province-modifier-removed': {
+    readonly provinceId: ProvinceId
+    readonly modifierId: string
+  }
+  'economy:owner-modifier-added': {
+    readonly countryId: CountryId
+    readonly modifier: IncomeModifier
+  }
+  'economy:owner-modifier-removed': {
+    readonly countryId: CountryId
+    readonly modifierId: string
+  }
 
   // Military mechanic events
   'military:army-raised': {
@@ -83,6 +100,12 @@ export interface EventMap {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
     readonly buildingType: BuildingType
+  }
+  'buildings:build-rejected': {
+    readonly countryId: CountryId
+    readonly provinceId: ProvinceId
+    readonly buildingType: BuildingType
+    readonly reason: 'terrain-limit-reached' | 'not-coastal'
   }
 
   // Technology mechanic events

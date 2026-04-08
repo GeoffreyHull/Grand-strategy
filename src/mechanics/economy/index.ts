@@ -3,19 +3,19 @@ import type { StateStore } from '../../engine/StateStore'
 import type { TickContext } from '../../engine/GameLoop'
 import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
-import type { CountryId } from '@contracts/mechanics/map'
-import type { EconomyState, CountryEconomy } from '@contracts/mechanics/economy'
+import type { CountryId, ProvinceId } from '@contracts/mechanics/map'
+import type { EconomyState, ProvinceEconomy, CountryEconomy } from '@contracts/mechanics/economy'
 import {
   DEFAULT_ECONOMY_CONFIG,
   validateEconomyConfig,
-  computeCountryIncome,
+  computeProvinceIncome,
 } from './types'
 
-export type { EconomyState, CountryEconomy } from '@contracts/mechanics/economy'
+export type { EconomyState, ProvinceEconomy, CountryEconomy, IncomeModifier } from '@contracts/mechanics/economy'
 export type { EconomyConfig } from './types'
 
 export function buildEconomyState(): EconomyState {
-  return { countries: {} }
+  return { provinces: {}, countries: {} }
 }
 
 export async function loadEconomyConfig(
@@ -35,54 +35,182 @@ export function initEconomyMechanic(
   config = DEFAULT_ECONOMY_CONFIG,
 ): { update: (ctx: TickContext) => void; destroy: () => void } {
 
-  function recomputeIncome(): void {
-    const { map, buildings } = stateStore.getState()
-    const countryIds = Object.keys(map.countries) as CountryId[]
-    stateStore.setState(draft => {
-      const countries = { ...draft.economy.countries }
-      for (const countryId of countryIds) {
-        const income = computeCountryIncome(countryId, map.provinces, buildings.buildings, config)
-        const existing = countries[countryId]
-        countries[countryId] = {
-          gold:            existing?.gold ?? config.startingGold,
-          incomePerCycle:  income,
-        }
-      }
-      return { ...draft, economy: { countries } }
-    })
+  // ── Initialise from current map state ────────────────────────────────────────
+  // Map is fully populated before this runs (initMapMechanic runs first in main.ts).
+
+  const { map } = stateStore.getState()
+  stateStore.setState(draft => {
+    const provinces: Record<ProvinceId, ProvinceEconomy> = {}
+    const countries: Record<CountryId, CountryEconomy>  = {}
+
+    for (const province of Object.values(map.provinces)) {
+      const base = config.terrainIncome[province.terrainType] ?? 0
+      provinces[province.id] = { baseIncome: base, provinceModifiers: [], currentIncome: base }
+    }
+
+    for (const country of Object.values(map.countries)) {
+      countries[country.id] = { gold: config.startingGold, modifiers: [] }
+    }
+
+    return { ...draft, economy: { provinces, countries } }
+  })
+
+  // ── Helper: recompute currentIncome for a single province ────────────────────
+
+  function recomputeProvince(provinceId: ProvinceId): void {
+    const { economy, map } = stateStore.getState()
+    const provEco = economy.provinces[provinceId]
+    const province = map.provinces[provinceId]
+    if (!provEco || !province) return
+
+    const ownerModifiers = economy.countries[province.countryId]?.modifiers ?? []
+    const newIncome = computeProvinceIncome(provEco.baseIncome, provEco.provinceModifiers, ownerModifiers)
+
+    stateStore.setState(draft => ({
+      ...draft,
+      economy: {
+        ...draft.economy,
+        provinces: {
+          ...draft.economy.provinces,
+          [provinceId]: { ...provEco, currentIncome: newIncome },
+        },
+      },
+    }))
   }
 
-  // Initialize immediately — map state is already populated by the time this runs
-  recomputeIncome()
+  // ── Helper: recompute all provinces owned by a country ───────────────────────
 
-  const buildingSub = eventBus.on('buildings:building-constructed', () => {
-    recomputeIncome()
+  function recomputeCountryProvinces(countryId: CountryId): void {
+    const { map } = stateStore.getState()
+    for (const province of Object.values(map.provinces)) {
+      if (province.countryId === countryId) recomputeProvince(province.id)
+    }
+  }
+
+  // ── Event subscriptions ──────────────────────────────────────────────────────
+
+  const provinceModAddedSub = eventBus.on('economy:province-modifier-added', (payload) => {
+    stateStore.setState(draft => {
+      const existing = draft.economy.provinces[payload.provinceId]
+      if (!existing) return draft
+      return {
+        ...draft,
+        economy: {
+          ...draft.economy,
+          provinces: {
+            ...draft.economy.provinces,
+            [payload.provinceId]: {
+              ...existing,
+              provinceModifiers: [...existing.provinceModifiers, payload.modifier],
+            },
+          },
+        },
+      }
+    })
+    recomputeProvince(payload.provinceId)
   })
 
-  const conquestSub = eventBus.on('map:province-conquered', () => {
-    recomputeIncome()
+  const provinceModRemovedSub = eventBus.on('economy:province-modifier-removed', (payload) => {
+    stateStore.setState(draft => {
+      const existing = draft.economy.provinces[payload.provinceId]
+      if (!existing) return draft
+      return {
+        ...draft,
+        economy: {
+          ...draft.economy,
+          provinces: {
+            ...draft.economy.provinces,
+            [payload.provinceId]: {
+              ...existing,
+              provinceModifiers: existing.provinceModifiers.filter(m => m.id !== payload.modifierId),
+            },
+          },
+        },
+      }
+    })
+    recomputeProvince(payload.provinceId)
   })
+
+  const ownerModAddedSub = eventBus.on('economy:owner-modifier-added', (payload) => {
+    stateStore.setState(draft => {
+      const existing = draft.economy.countries[payload.countryId]
+      if (!existing) return draft
+      return {
+        ...draft,
+        economy: {
+          ...draft.economy,
+          countries: {
+            ...draft.economy.countries,
+            [payload.countryId]: {
+              ...existing,
+              modifiers: [...existing.modifiers, payload.modifier],
+            },
+          },
+        },
+      }
+    })
+    recomputeCountryProvinces(payload.countryId)
+  })
+
+  const ownerModRemovedSub = eventBus.on('economy:owner-modifier-removed', (payload) => {
+    stateStore.setState(draft => {
+      const existing = draft.economy.countries[payload.countryId]
+      if (!existing) return draft
+      return {
+        ...draft,
+        economy: {
+          ...draft.economy,
+          countries: {
+            ...draft.economy.countries,
+            [payload.countryId]: {
+              ...existing,
+              modifiers: existing.modifiers.filter(m => m.id !== payload.modifierId),
+            },
+          },
+        },
+      }
+    })
+    recomputeCountryProvinces(payload.countryId)
+  })
+
+  const conquestSub = eventBus.on('map:province-conquered', (payload) => {
+    // The province now has a new owner — recompute with that owner's modifiers.
+    recomputeProvince(payload.provinceId)
+  })
+
+  // ── Update tick ──────────────────────────────────────────────────────────────
 
   function update(ctx: TickContext): void {
     const { frame } = ctx
-    // Skip frame 0 (initialization tick) and non-cycle frames
     if (frame === 0 || frame % config.cycleFrames !== 0) return
+
+    const { economy, map } = stateStore.getState()
+
+    // Sum currentIncome per country across all owned provinces
+    const incomeByCountry: Partial<Record<CountryId, number>> = {}
+    for (const province of Object.values(map.provinces)) {
+      const eco = economy.provinces[province.id]
+      if (!eco) continue
+      incomeByCountry[province.countryId] =
+        (incomeByCountry[province.countryId] ?? 0) + eco.currentIncome
+    }
 
     stateStore.setState(draft => {
       const countries = { ...draft.economy.countries }
-      for (const [id, eco] of Object.entries(countries)) {
-        const countryId = id as CountryId
-        countries[countryId] = { ...eco, gold: eco.gold + eco.incomePerCycle }
+      for (const [id, income] of Object.entries(incomeByCountry)) {
+        const cid = id as CountryId
+        const existing = countries[cid]
+        if (!existing) continue
+        countries[cid] = { ...existing, gold: existing.gold + (income as number) }
       }
-      return { ...draft, economy: { countries } }
+      return { ...draft, economy: { ...draft.economy, countries } }
     })
 
-    const updated = stateStore.getState().economy
-    for (const [id, eco] of Object.entries(updated.countries)) {
-      if (eco.incomePerCycle > 0) {
+    for (const [id, income] of Object.entries(incomeByCountry)) {
+      if ((income as number) > 0) {
         eventBus.emit('economy:income-collected', {
           countryId: id as CountryId,
-          amount:    eco.incomePerCycle,
+          amount:    income as number,
           frame,
         })
       }
@@ -91,6 +219,12 @@ export function initEconomyMechanic(
 
   return {
     update,
-    destroy: () => { buildingSub.unsubscribe(); conquestSub.unsubscribe() },
+    destroy: () => {
+      provinceModAddedSub.unsubscribe()
+      provinceModRemovedSub.unsubscribe()
+      ownerModAddedSub.unsubscribe()
+      ownerModRemovedSub.unsubscribe()
+      conquestSub.unsubscribe()
+    },
   }
 }

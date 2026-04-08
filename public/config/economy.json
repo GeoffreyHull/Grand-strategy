@@ -1,11 +1,13 @@
 {
   "cycleFrames": 60,
-  "baseProvinceIncome": 5,
-  "buildingIncome": {
-    "farm": 10,
-    "port": 15,
-    "barracks": 0,
-    "walls": 0
-  },
-  "startingGold": 50
+  "startingGold": 50,
+  "terrainIncome": {
+    "plains":    5,
+    "hills":     3,
+    "mountains": 1,
+    "forest":    4,
+    "desert":    2,
+    "tundra":    1,
+    "ocean":     0
+  }
 }

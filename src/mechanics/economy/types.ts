@@ -1,8 +1,7 @@
 // Internal types and helpers for the economy mechanic.
 // Public-facing types live in src/contracts/mechanics/economy.ts.
 
-import type { Province, ProvinceId, CountryId } from '@contracts/mechanics/map'
-import type { Building, BuildingId, BuildingType } from '@contracts/mechanics/buildings'
+import type { IncomeModifier } from '@contracts/mechanics/economy'
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -20,87 +19,91 @@ function assertNonNegativeFiniteNumber(value: unknown, path: string): asserts va
   }
 }
 
-export interface BuildingIncomeConfig {
-  readonly farm: number
-  readonly port: number
-  readonly barracks: number
-  readonly walls: number
-}
-
 export interface EconomyConfig {
   /** How many frames between income ticks (default 60 = 3 s at 20 Hz) */
   readonly cycleFrames: number
-  /** Gold earned per province owned per income cycle */
-  readonly baseProvinceIncome: number
-  /** Additional gold per building type per income cycle */
-  readonly buildingIncome: BuildingIncomeConfig
   /** Starting gold for every country */
   readonly startingGold: number
+  /** Base income per terrain type per income cycle */
+  readonly terrainIncome: Readonly<Record<string, number>>
 }
 
 export const DEFAULT_ECONOMY_CONFIG: EconomyConfig = {
-  cycleFrames:        60,
-  baseProvinceIncome: 5,
-  buildingIncome: {
-    farm:     10,
-    port:     15,
-    barracks: 0,
-    walls:    0,
+  cycleFrames:   60,
+  startingGold:  50,
+  terrainIncome: {
+    plains:    5,
+    hills:     3,
+    mountains: 1,
+    forest:    4,
+    desert:    2,
+    tundra:    1,
+    ocean:     0,
   },
-  startingGold: 50,
 }
 
 export function validateEconomyConfig(raw: unknown): EconomyConfig {
   if (!isRecord(raw)) throw new Error('economy config must be an object')
 
-  assertPositiveFiniteNumber(raw['cycleFrames'],        'economy.cycleFrames')
-  assertNonNegativeFiniteNumber(raw['baseProvinceIncome'], 'economy.baseProvinceIncome')
-  assertNonNegativeFiniteNumber(raw['startingGold'],       'economy.startingGold')
+  assertPositiveFiniteNumber(raw['cycleFrames'],   'economy.cycleFrames')
+  assertNonNegativeFiniteNumber(raw['startingGold'], 'economy.startingGold')
 
-  const bi = raw['buildingIncome']
-  if (!isRecord(bi)) throw new Error('economy.buildingIncome must be an object')
-  assertNonNegativeFiniteNumber(bi['farm'],     'economy.buildingIncome.farm')
-  assertNonNegativeFiniteNumber(bi['port'],     'economy.buildingIncome.port')
-  assertNonNegativeFiniteNumber(bi['barracks'], 'economy.buildingIncome.barracks')
-  assertNonNegativeFiniteNumber(bi['walls'],    'economy.buildingIncome.walls')
+  const ti = raw['terrainIncome']
+  if (!isRecord(ti)) throw new Error('economy.terrainIncome must be an object')
+  const terrainIncome: Record<string, number> = {}
+  for (const [terrain, value] of Object.entries(ti)) {
+    assertNonNegativeFiniteNumber(value, `economy.terrainIncome.${terrain}`)
+    terrainIncome[terrain] = value as number
+  }
 
   return {
-    cycleFrames:        raw['cycleFrames']        as number,
-    baseProvinceIncome: raw['baseProvinceIncome'] as number,
-    startingGold:       raw['startingGold']       as number,
-    buildingIncome: {
-      farm:     bi['farm']     as number,
-      port:     bi['port']     as number,
-      barracks: bi['barracks'] as number,
-      walls:    bi['walls']    as number,
-    },
+    cycleFrames:   raw['cycleFrames']   as number,
+    startingGold:  raw['startingGold']  as number,
+    terrainIncome,
   }
 }
 
 /**
- * Compute how much income a country earns per cycle.
- * Income is based on provinces currently owned by that country, plus
- * bonuses from any buildings physically located in those provinces
- * (regardless of who built them — captured buildings benefit the new owner).
+ * Apply the two-layer modifier pipeline to compute a province's current income.
+ *
+ * Pipeline order:
+ *   1. base terrain income
+ *   2. + flat 'add' modifiers (province-bound + applicable owner-bound)
+ *   3. × 'multiply' modifiers (province-bound + applicable owner-bound)
+ *
+ * Owner modifiers with a `condition` are only applied when that condition is
+ * satisfied by the province's own modifiers (e.g. province has a farm).
  */
-export function computeCountryIncome(
-  countryId: CountryId,
-  provinces: Readonly<Record<ProvinceId, Province>>,
-  buildings: Readonly<Record<BuildingId, Building>>,
-  config: EconomyConfig,
+export function computeProvinceIncome(
+  base: number,
+  provinceModifiers: readonly IncomeModifier[],
+  ownerModifiers: readonly IncomeModifier[],
 ): number {
-  const ownedProvinceIds = new Set<ProvinceId>()
-  for (const province of Object.values(provinces)) {
-    if (province.countryId === countryId) ownedProvinceIds.add(province.id)
-  }
+  // Derive which building types are present from province modifiers.
+  // Building-sourced modifiers carry a `buildingType` field for this purpose.
+  const presentBuildingTypes = new Set(
+    provinceModifiers
+      .filter(m => m.buildingType !== undefined)
+      .map(m => m.buildingType as string),
+  )
 
-  let income = ownedProvinceIds.size * config.baseProvinceIncome
+  const applicableOwner = ownerModifiers.filter(m => {
+    if (!m.condition) return true
+    if (m.condition.type === 'hasBuilding') {
+      return presentBuildingTypes.has(m.condition.buildingType)
+    }
+    return false
+  })
 
-  for (const building of Object.values(buildings)) {
-    if (!ownedProvinceIds.has(building.provinceId)) continue
-    const bonus = config.buildingIncome[building.buildingType as BuildingType] ?? 0
-    income += bonus
-  }
+  const all = [...provinceModifiers, ...applicableOwner]
 
-  return income
+  const flatSum = all
+    .filter(m => m.op === 'add')
+    .reduce((sum, m) => sum + m.value, 0)
+
+  const multiplier = all
+    .filter(m => m.op === 'multiply')
+    .reduce((product, m) => product * m.value, 1)
+
+  return (base + flatSum) * multiplier
 }

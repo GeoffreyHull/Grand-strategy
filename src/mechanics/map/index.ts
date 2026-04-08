@@ -5,6 +5,8 @@ import type { EventBus } from '../../engine/EventBus'
 import type { StateStore } from '../../engine/StateStore'
 import type { EventMap } from '@contracts/events'
 import type { GameState, MapState } from '@contracts/state'
+import type { MilitaryState } from '@contracts/mechanics/military'
+import type { BuildingsState } from '@contracts/mechanics/buildings'
 import type { Province, Country, ProvinceId, CountryId } from '@contracts/mechanics/map'
 import { cellKey, hexNeighbors } from './HexGrid'
 import { WORLD_COUNTRIES, WORLD_PROVINCES } from './WorldData'
@@ -78,24 +80,38 @@ function populateLegend(countries: Readonly<Record<CountryId, Country>>): void {
   }
 }
 
-/** Update the info panel DOM when a province is selected. */
-function updateInfoPanel(state: Readonly<MapState>): void {
+/** Update the info panel DOM when a province is selected or hovered. */
+function updateInfoPanel(
+  map: Readonly<MapState>,
+  military: Readonly<MilitaryState>,
+  buildings: Readonly<BuildingsState>,
+): void {
   const panel = document.getElementById('info-panel')
   if (!panel) return
 
-  const provinceId = state.selectedProvinceId ?? state.hoveredProvinceId
+  const provinceId = map.selectedProvinceId ?? map.hoveredProvinceId
   if (!provinceId) {
     panel.className = 'empty'
     panel.innerHTML = '<h2>Select a Province</h2><p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>'
     return
   }
 
-  const province = state.provinces[provinceId]
-  const country  = province ? state.countries[province.countryId] : undefined
+  const province = map.provinces[provinceId]
+  const country  = province ? map.countries[province.countryId] : undefined
   if (!province || !country) return
 
-  const isSelected = provinceId === state.selectedProvinceId
-  const isCapital  = country.capitalProvinceId === province.id
+  const isCapital = country.capitalProvinceId === province.id
+
+  // Province armies and buildings
+  const provinceArmies    = Object.values(military.armies).filter(a => a.provinceId === provinceId)
+  const provinceBuildings = Object.values(buildings.buildings).filter(b => b.provinceId === provinceId)
+
+  const armyStrength  = provinceArmies.reduce((sum, a) => sum + a.strength, 0)
+  const buildingNames = provinceBuildings.map(b => capitalise(b.buildingType)).join(', ') || 'None'
+
+  // Country-wide totals
+  const countryArmies    = Object.values(military.armies).filter(a => a.countryId === country.id)
+  const countryBuildings = Object.values(buildings.buildings).filter(b => b.countryId === country.id)
 
   panel.className = ''
   panel.innerHTML = `
@@ -106,8 +122,12 @@ function updateInfoPanel(state: Readonly<MapState>): void {
     </div>
     <div class="field"><span>Terrain</span><span>${capitalise(province.terrainType)}</span></div>
     <div class="field"><span>Coastal</span><span>${province.isCoastal ? 'Yes' : 'No'}</span></div>
-    <div class="field"><span>Status</span><span>${isSelected ? 'Selected' : 'Hovered'}</span></div>
-    <div class="field"><span>Provinces</span><span>${country.provinceIds.length} total</span></div>
+    <div class="field"><span>Armies</span><span>${provinceArmies.length > 0 ? `${provinceArmies.length} (str ${armyStrength})` : 'None'}</span></div>
+    <div class="field"><span>Buildings</span><span>${buildingNames}</span></div>
+    <div style="border-top:1px solid #2a3a5a;margin:6px 0 4px"></div>
+    <div class="field"><span>Provinces</span><span>${country.provinceIds.length}</span></div>
+    <div class="field"><span>Armies</span><span>${countryArmies.length} (str ${countryArmies.reduce((s, a) => s + a.strength, 0)})</span></div>
+    <div class="field"><span>Buildings</span><span>${countryBuildings.length}</span></div>
   `
 }
 
@@ -145,13 +165,18 @@ export function initMapMechanic(
   // Populate static legend
   populateLegend(stateStore.getSlice('map').countries)
 
+  function refreshPanel(): void {
+    const s = stateStore.getState()
+    updateInfoPanel(s.map, s.military, s.buildings)
+  }
+
   // React to hover events
   eventBus.on('map:province-hovered', ({ provinceId }) => {
     stateStore.setState(draft => ({
       ...draft,
       map: { ...draft.map, hoveredProvinceId: provinceId },
     }))
-    updateInfoPanel(stateStore.getSlice('map'))
+    refreshPanel()
   })
 
   // React to selection events
@@ -160,7 +185,131 @@ export function initMapMechanic(
       ...draft,
       map: { ...draft.map, selectedProvinceId: provinceId },
     }))
-    updateInfoPanel(stateStore.getSlice('map'))
+    refreshPanel()
+  })
+
+  // Refresh panel when armies or buildings change
+  eventBus.on('military:army-raised', refreshPanel)
+  eventBus.on('buildings:building-constructed', refreshPanel)
+  eventBus.on('map:province-conquered', refreshPanel)
+
+  // Handle AI expansion with combat resolution
+  eventBus.on('ai:decision-made', ({ decision }) => {
+    if (decision.action !== 'EXPAND') return
+
+    const mapState      = stateStore.getSlice('map')
+    const militaryState = stateStore.getSlice('military')
+    const buildingState = stateStore.getSlice('buildings')
+
+    const country = mapState.countries[decision.countryId]
+    if (!country || country.provinceIds.length === 0) return
+
+    // Collect unique neighbouring provinces owned by other countries
+    const seen = new Set<ProvinceId>()
+    const targets: ProvinceId[] = []
+    for (const provinceId of country.provinceIds) {
+      const province = mapState.provinces[provinceId]
+      if (!province) continue
+      for (const cell of province.cells) {
+        for (const nb of hexNeighbors(cell.col, cell.row)) {
+          const nbId = mapState.cellIndex[cellKey(nb.col, nb.row)]
+          if (!nbId || seen.has(nbId)) continue
+          seen.add(nbId)
+          const nbProvince = mapState.provinces[nbId]
+          if (nbProvince && nbProvince.countryId !== decision.countryId) {
+            targets.push(nbId)
+          }
+        }
+      }
+    }
+
+    if (targets.length === 0) return
+
+    const targetId      = targets[Math.floor(Math.random() * targets.length)]
+    const targetProvince = mapState.provinces[targetId]
+    if (!targetProvince) return
+    const oldOwnerId = targetProvince.countryId
+    const newOwnerId = decision.countryId
+
+    // ── Combat resolution ─────────────────────────────────────────────────────
+
+    // Attacker strength: armies the attacker owns in provinces adjacent to the target
+    const attackerAdjacent = new Set<ProvinceId>()
+    for (const cell of targetProvince.cells) {
+      for (const nb of hexNeighbors(cell.col, cell.row)) {
+        const adjId = mapState.cellIndex[cellKey(nb.col, nb.row)]
+        if (adjId && mapState.provinces[adjId]?.countryId === newOwnerId) {
+          attackerAdjacent.add(adjId)
+        }
+      }
+    }
+    const attackerArmyStrength = Object.values(militaryState.armies)
+      .filter(a => a.countryId === newOwnerId && attackerAdjacent.has(a.provinceId))
+      .reduce((sum, a) => sum + a.strength, 0)
+
+    const BASE_ATTACK = 50
+    const attackStrength = attackerArmyStrength + BASE_ATTACK + Math.random() * 30
+
+    // Defender strength: armies in the target province + terrain + walls
+    const defenderArmyStrength = Object.values(militaryState.armies)
+      .filter(a => a.countryId === oldOwnerId && a.provinceId === targetId)
+      .reduce((sum, a) => sum + a.strength, 0)
+
+    const terrainMultiplier: Record<string, number> = {
+      plains: 1.0, hills: 1.3, mountains: 1.6,
+      forest: 1.2, desert: 0.9, tundra: 1.1, ocean: 1.0,
+    }
+    const terrainMod = terrainMultiplier[targetProvince.terrainType] ?? 1.0
+
+    const hasWalls = Object.values(buildingState.buildings)
+      .some(b => b.provinceId === targetId && b.buildingType === 'walls')
+
+    const BASE_DEFENSE = 20
+    const WALLS_BONUS  = 60
+    const defenseStrength = defenderArmyStrength * terrainMod
+      + (hasWalls ? WALLS_BONUS : 0)
+      + BASE_DEFENSE
+      + Math.random() * 30
+
+    // ── Outcome ───────────────────────────────────────────────────────────────
+
+    if (attackStrength > defenseStrength) {
+      stateStore.setState(draft => {
+        const oldOwner = draft.map.countries[oldOwnerId]
+        const newOwner = draft.map.countries[newOwnerId]
+        if (!oldOwner || !newOwner) return draft
+        return {
+          ...draft,
+          map: {
+            ...draft.map,
+            provinces: {
+              ...draft.map.provinces,
+              [targetId]: { ...targetProvince, countryId: newOwnerId },
+            },
+            countries: {
+              ...draft.map.countries,
+              [oldOwnerId]: {
+                ...oldOwner,
+                provinceIds: oldOwner.provinceIds.filter(id => id !== targetId),
+              },
+              [newOwnerId]: {
+                ...newOwner,
+                provinceIds: [...newOwner.provinceIds, targetId],
+              },
+            },
+          },
+        }
+      })
+      eventBus.emit('map:province-conquered', { provinceId: targetId, newOwnerId, oldOwnerId })
+    } else {
+      eventBus.emit('map:province-attack-repelled', {
+        provinceId: targetId,
+        attackerId: newOwnerId,
+        defenderId: oldOwnerId,
+        attackStrength:  Math.round(attackStrength),
+        defenseStrength: Math.round(defenseStrength),
+      })
+    }
   })
 
   // Signal ready

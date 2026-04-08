@@ -25,6 +25,8 @@ Exported from `src/mechanics/map/index.ts`:
 | `map:province-hovered` | `{ provinceId \| null }` | Mouse enters or leaves a province |
 | `map:country-selected` | `{ countryId }` | User clicks any province (fires with province-selected) |
 | `map:ready` | `{ provinceCount, countryCount }` | After `initMapMechanic` completes setup |
+| `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId }` | An AI nation wins a combat and takes a neighbouring province |
+| `map:province-attack-repelled` | `{ provinceId, attackerId, defenderId, attackStrength, defenseStrength }` | An attack fails — defender holds the province |
 
 ## Events Consumed
 
@@ -32,6 +34,10 @@ Exported from `src/mechanics/map/index.ts`:
 |---|---|---|
 | `map:province-hovered` | `{ provinceId \| null }` | Updates `hoveredProvinceId` in state; refreshes info panel |
 | `map:province-selected` | `{ provinceId, countryId }` | Updates `selectedProvinceId` in state; refreshes info panel |
+| `ai:decision-made` | `{ decision }` | On `EXPAND`: runs combat resolution against a random neighbouring province. Attacker uses armies in adjacent provinces + base 50; defender uses armies in target province × terrain multiplier (plains 1.0, hills 1.3, mountains 1.6, forest 1.2, tundra 1.1, desert 0.9) + walls bonus 60 + base 20. Attacker win → `map:province-conquered`; defender win → `map:province-attack-repelled` |
+| `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel to show updated army counts |
+| `buildings:building-constructed` | `{ buildingId, ... }` | Refreshes info panel to show updated building list |
+| `map:province-conquered` | `{ provinceId, ... }` | Refreshes info panel to reflect new ownership |
 
 *(The mechanic subscribes to its own events so state flows through a single path.)*
 

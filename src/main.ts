@@ -10,6 +10,7 @@ import {
   buildMilitaryState,
   initMilitaryMechanic,
   loadMilitaryConfig,
+  requestBuildArmy,
 } from './mechanics/military/index'
 import {
   buildNavyState,
@@ -20,6 +21,7 @@ import {
   buildBuildingsState,
   initBuildingsMechanic,
   loadBuildingsConfig,
+  requestBuildBuilding,
 } from './mechanics/buildings/index'
 import {
   buildTechnologyState,
@@ -86,8 +88,50 @@ eventBus.on('map:ready', ({ provinceCount, countryCount }) => {
   console.info(`[Grand Strategy] Map ready — ${countryCount} nations, ${provinceCount} provinces`)
 })
 
+eventBus.on('map:province-conquered', ({ provinceId, newOwnerId, oldOwnerId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const newOwner  = countries[newOwnerId]?.name ?? newOwnerId
+  const oldOwner  = countries[oldOwnerId]?.name ?? oldOwnerId
+  console.info(`[Conquest] ${newOwner} seized ${provinceId} from ${oldOwner}`)
+})
+
+eventBus.on('map:province-attack-repelled', ({ provinceId, attackerId, defenderId, attackStrength, defenseStrength }) => {
+  const countries = stateStore.getSlice('map').countries
+  const attacker  = countries[attackerId]?.name ?? attackerId
+  const defender  = countries[defenderId]?.name ?? defenderId
+  console.debug(`[Combat] ${attacker} attack on ${provinceId} repelled by ${defender} (atk ${attackStrength} vs def ${defenseStrength})`)
+})
+
 eventBus.on('ai:decision-made', ({ decision }) => {
   console.debug(`[AI] ${decision.countryId} → ${decision.action} (priority ${decision.priority.toFixed(2)})`)
+
+  const { countryId, action } = decision
+  const mapState = stateStore.getSlice('map')
+  const country  = mapState.countries[countryId]
+  if (!country || country.provinceIds.length === 0) return
+
+  const provinces = country.provinceIds
+    .map(id => mapState.provinces[id])
+    .filter((p): p is NonNullable<typeof p> => p !== undefined)
+
+  if (action === 'FORTIFY') {
+    // Raise an army in a random owned province
+    const target = provinces[Math.floor(Math.random() * provinces.length)]
+    requestBuildArmy(eventBus, countryId, target.id, militaryConfig)
+
+  } else if (action === 'ALLY') {
+    // Build a port on a coastal province, otherwise a farm
+    const coastals = provinces.filter(p => p.isCoastal)
+    const target   = coastals.length > 0
+      ? coastals[Math.floor(Math.random() * coastals.length)]
+      : provinces[Math.floor(Math.random() * provinces.length)]
+    requestBuildBuilding(eventBus, countryId, target.id, coastals.length > 0 ? 'port' : 'farm', buildingsConfig)
+
+  } else if (action === 'ISOLATE') {
+    // Build walls in a random province
+    const target = provinces[Math.floor(Math.random() * provinces.length)]
+    requestBuildBuilding(eventBus, countryId, target.id, 'walls', buildingsConfig)
+  }
 })
 
 eventBus.on('military:army-raised', ({ armyId, countryId, provinceId }) => {

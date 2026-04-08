@@ -8,10 +8,12 @@ import type { TechnologyId, TechnologyType } from './mechanics/technology'
 
 export interface EventMap {
   // Map mechanic events
-  'map:province-selected': { provinceId: ProvinceId; countryId: CountryId }
-  'map:province-hovered':  { provinceId: ProvinceId | null }
-  'map:country-selected':  { countryId: CountryId }
-  'map:ready':             { provinceCount: number; countryCount: number }
+  'map:province-selected':   { provinceId: ProvinceId; countryId: CountryId }
+  'map:province-hovered':    { provinceId: ProvinceId | null }
+  'map:country-selected':    { countryId: CountryId }
+  'map:ready':               { provinceCount: number; countryCount: number }
+  'map:province-conquered':       { provinceId: ProvinceId; newOwnerId: CountryId; oldOwnerId: CountryId }
+  'map:province-attack-repelled': { provinceId: ProvinceId; attackerId: CountryId; defenderId: CountryId; attackStrength: number; defenseStrength: number }
 
   // AI mechanic events
   'ai:decision-made':      { decision: AIDecision }

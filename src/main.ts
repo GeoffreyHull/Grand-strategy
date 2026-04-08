@@ -89,9 +89,17 @@ eventBus.on('map:ready', ({ provinceCount, countryCount }) => {
 })
 
 eventBus.on('map:province-conquered', ({ provinceId, newOwnerId, oldOwnerId }) => {
-  const newOwner = stateStore.getSlice('map').countries[newOwnerId]?.name ?? newOwnerId
-  const oldOwner = stateStore.getSlice('map').countries[oldOwnerId]?.name ?? oldOwnerId
+  const countries = stateStore.getSlice('map').countries
+  const newOwner  = countries[newOwnerId]?.name ?? newOwnerId
+  const oldOwner  = countries[oldOwnerId]?.name ?? oldOwnerId
   console.info(`[Conquest] ${newOwner} seized ${provinceId} from ${oldOwner}`)
+})
+
+eventBus.on('map:province-attack-repelled', ({ provinceId, attackerId, defenderId, attackStrength, defenseStrength }) => {
+  const countries = stateStore.getSlice('map').countries
+  const attacker  = countries[attackerId]?.name ?? attackerId
+  const defender  = countries[defenderId]?.name ?? defenderId
+  console.debug(`[Combat] ${attacker} attack on ${provinceId} repelled by ${defender} (atk ${attackStrength} vs def ${defenseStrength})`)
 })
 
 eventBus.on('ai:decision-made', ({ decision }) => {

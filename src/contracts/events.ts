@@ -12,7 +12,8 @@ export interface EventMap {
   'map:province-hovered':    { provinceId: ProvinceId | null }
   'map:country-selected':    { countryId: CountryId }
   'map:ready':               { provinceCount: number; countryCount: number }
-  'map:province-conquered':  { provinceId: ProvinceId; newOwnerId: CountryId; oldOwnerId: CountryId }
+  'map:province-conquered':       { provinceId: ProvinceId; newOwnerId: CountryId; oldOwnerId: CountryId }
+  'map:province-attack-repelled': { provinceId: ProvinceId; attackerId: CountryId; defenderId: CountryId; attackStrength: number; defenseStrength: number }
 
   // AI mechanic events
   'ai:decision-made':      { decision: AIDecision }

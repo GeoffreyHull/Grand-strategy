@@ -13,6 +13,7 @@ import {
 
 export type { Building, BuildingId, BuildingType, BuildingsState } from '@contracts/mechanics/buildings'
 export type { BuildingsConfig, BuildingTypeConfig, TerrainBuildingLimits } from './types'
+export { DEFAULT_BUILDINGS_CONFIG } from './types'
 
 export function buildBuildingsState() {
   return { buildings: {} as Record<BuildingId, Building> }

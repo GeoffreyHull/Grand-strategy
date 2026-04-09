@@ -11,43 +11,102 @@ import {
   initMilitaryMechanic,
   loadMilitaryConfig,
   requestBuildArmy,
+  DEFAULT_MILITARY_CONFIG,
 } from './mechanics/military/index'
 import {
   buildNavyState,
   initNavyMechanic,
   loadNavyConfig,
+  DEFAULT_NAVY_CONFIG,
 } from './mechanics/navy/index'
 import {
   buildBuildingsState,
   initBuildingsMechanic,
   loadBuildingsConfig,
   requestBuildBuilding,
+  DEFAULT_BUILDINGS_CONFIG,
 } from './mechanics/buildings/index'
 import {
   buildTechnologyState,
   initTechnologyMechanic,
   loadTechnologyConfig,
+  DEFAULT_TECHNOLOGY_CONFIG,
 } from './mechanics/technology/index'
 import {
   buildEconomyState,
   initEconomyMechanic,
   loadEconomyConfig,
+  DEFAULT_ECONOMY_CONFIG,
 } from './mechanics/economy/index'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
+interface ConfigWarning { config: string; message: string }
+const configWarnings: ConfigWarning[] = []
+
+async function loadWithFallback<T>(loader: () => Promise<T>, fallback: T, name: string): Promise<T> {
+  try {
+    return await loader()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    configWarnings.push({ config: name, message })
+    console.warn(`[Config] ${name} failed validation, using defaults: ${message}`)
+    return fallback
+  }
+}
+
 const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig] = await Promise.all([
-  loadMilitaryConfig(),
-  loadNavyConfig(),
-  loadBuildingsConfig(),
-  loadTechnologyConfig(),
-  loadEconomyConfig(),
+  loadWithFallback(loadMilitaryConfig, DEFAULT_MILITARY_CONFIG, 'military'),
+  loadWithFallback(loadNavyConfig,     DEFAULT_NAVY_CONFIG,     'navy'),
+  loadWithFallback(loadBuildingsConfig, DEFAULT_BUILDINGS_CONFIG, 'buildings'),
+  loadWithFallback(loadTechnologyConfig, DEFAULT_TECHNOLOGY_CONFIG, 'technology'),
+  loadWithFallback(loadEconomyConfig,  DEFAULT_ECONOMY_CONFIG,  'economy'),
 ])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement
 if (!canvas) throw new Error('Missing #game-canvas element')
+
+if (configWarnings.length > 0) {
+  const banner = document.createElement('div')
+  banner.style.cssText = [
+    'position:fixed;top:0;left:0;right:0;z-index:9999',
+    'background:rgba(100,30,15,0.96);border-bottom:2px solid #c0392b',
+    'padding:10px 16px;font-family:Georgia,serif;color:#e8d9b0',
+    'display:flex;align-items:flex-start;gap:12px',
+  ].join(';')
+
+  const content = document.createElement('div')
+  content.style.cssText = 'flex:1;font-size:12px'
+
+  const title = document.createElement('strong')
+  title.style.cssText = 'color:#e8c53a;font-size:13px;display:block;margin-bottom:4px'
+  title.textContent = 'Config Warning \u2014 using built-in defaults'
+
+  const list = document.createElement('ul')
+  list.style.cssText = 'margin:4px 0 0;padding-left:16px'
+  for (const w of configWarnings) {
+    const item = document.createElement('li')
+    item.textContent = `${w.config}: ${w.message}`
+    list.appendChild(item)
+  }
+
+  const dismiss = document.createElement('button')
+  dismiss.textContent = '\u2715'
+  dismiss.style.cssText = [
+    'background:none;border:1px solid #c0392b;color:#e8d9b0',
+    'cursor:pointer;padding:2px 8px;font-size:13px;border-radius:3px',
+    'flex-shrink:0;margin-top:2px',
+  ].join(';')
+  dismiss.addEventListener('click', () => banner.remove())
+
+  content.appendChild(title)
+  content.appendChild(list)
+  banner.appendChild(content)
+  banner.appendChild(dismiss)
+  document.body.appendChild(banner)
+}
 
 const eventBus   = new EventBus<EventMap>()
 const mapState   = buildMapState()

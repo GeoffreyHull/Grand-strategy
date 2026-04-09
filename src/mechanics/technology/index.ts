@@ -17,6 +17,7 @@ import {
 
 export type { ResearchedTechnology, TechnologyId, TechnologyType, TechnologyState } from '@contracts/mechanics/technology'
 export type { TechnologyConfig, TechnologyTypeConfig } from './types'
+export { DEFAULT_TECHNOLOGY_CONFIG } from './types'
 
 export function buildTechnologyState() {
   return {

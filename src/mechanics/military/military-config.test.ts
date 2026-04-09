@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { validateMilitaryConfig, DEFAULT_MILITARY_CONFIG } from './types'
 
-const VALID: unknown = { army: { durationFrames: 60, strength: 100 } }
+const VALID: unknown = { army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25 } }
 
 describe('DEFAULT_MILITARY_CONFIG', () => {
   it('has positive durationFrames', () => {
@@ -70,7 +70,7 @@ describe('validateMilitaryConfig', () => {
   })
 
   it('accepts non-integer positive values', () => {
-    const result = validateMilitaryConfig({ army: { durationFrames: 1.5, strength: 50.5 } })
+    const result = validateMilitaryConfig({ army: { durationFrames: 1.5, strength: 50.5, barracksStrengthBonus: 0.5 } })
     expect(result.army.durationFrames).toBe(1.5)
   })
 })

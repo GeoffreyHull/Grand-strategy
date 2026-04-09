@@ -53,11 +53,14 @@ export function initMilitaryMechanic(
     if (payload.buildableType !== 'army') return
 
     const armyId = crypto.randomUUID() as ArmyId
+    const hasBarracks = Object.values(stateStore.getState().buildings?.buildings ?? {})
+      .some(b => b.provinceId === payload.locationId && b.buildingType === 'barracks')
+    const strength = config.army.strength + (hasBarracks ? config.army.barracksStrengthBonus : 0)
     const army: Army = {
       id:           armyId,
       countryId:    payload.ownerId,
       provinceId:   payload.locationId,
-      strength:     config.army.strength,
+      strength,
       createdFrame: payload.completedFrame,
     }
 

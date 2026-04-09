@@ -9,7 +9,7 @@ Manages armies. Exposes a function to request army construction via the construc
 | Export | Description |
 |--------|-------------|
 | `buildMilitaryState()` | Returns the initial `MilitaryState` `{ armies: {} }` |
-| `requestBuildArmy(eventBus, ownerId, locationId)` | Emits a `construction:request` for an army (60 frames to build, strength 100) |
+| `requestBuildArmy(eventBus, ownerId, locationId)` | Emits a `construction:request` for an army (60 frames to build, base strength 100) |
 | `initMilitaryMechanic(eventBus, stateStore)` | Subscribes to `construction:complete`, returns `{ destroy }` |
 | `Army` | Re-exported from contracts |
 | `ArmyId` | Re-exported from contracts |
@@ -43,7 +43,7 @@ interface Army {
   readonly id: ArmyId
   readonly countryId: CountryId
   readonly provinceId: ProvinceId
-  readonly strength: number       // default 100
+  readonly strength: number       // base 100; +25 if a barracks is present in the province
   readonly createdFrame: number
 }
 ```
@@ -51,6 +51,7 @@ interface Army {
 ## Design Notes
 
 - Army construction is delegated entirely to the construction mechanic. The military mechanic only handles the "what happens when it finishes" side.
+- **Barracks grant a flat strength bonus** (`barracksStrengthBonus`, default +25) to any army raised in that province. The bonus applies once regardless of how many barracks are present. The check reads directly from the buildings state slice at completion time.
 - No update function is needed — the mechanic is purely event-driven.
 - `requestBuildArmy` is a standalone exported function (not a closure) so it can be called directly from UI or AI code without importing internal mechanic state.
 - Army destruction on conquest is purely positional: any army belonging to the old owner in the exact conquered province is removed. Armies in adjacent provinces are unaffected.

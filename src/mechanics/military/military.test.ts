@@ -7,6 +7,8 @@ import type { GameState } from '@contracts/state'
 import type { CountryId, ProvinceId } from '@contracts/mechanics/map'
 import type { JobId } from '@contracts/mechanics/construction'
 import type { ArmyId } from '@contracts/mechanics/military'
+import type { Building, BuildingId, BuildingType } from '@contracts/mechanics/buildings'
+import { DEFAULT_MILITARY_CONFIG } from './types'
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -29,9 +31,16 @@ function makeMockEventBus() {
   return { emit, on, off: vi.fn(), once: vi.fn() } as unknown as EventBus<EventMap> & { emit: typeof emit; on: typeof on }
 }
 
-function makeStateStore() {
+function makeBuilding(id: string, provinceId: ProvinceId, buildingType: BuildingType): Building {
+  return { id: id as BuildingId, countryId: ownerId, provinceId, buildingType, completedFrame: 1 }
+}
+
+function makeStateStore(existingBuildings: Building[] = []) {
+  const buildingMap = Object.fromEntries(existingBuildings.map(b => [b.id, b])) as Record<BuildingId, Building>
+
   let state: GameState = {
-    military: buildMilitaryState(),
+    military:  buildMilitaryState(),
+    buildings: { buildings: buildingMap },
   } as unknown as GameState
 
   return {
@@ -314,5 +323,76 @@ describe('initMilitaryMechanic — destroy', () => {
     })
 
     expect((store.setState as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(setStateCalls)
+  })
+})
+
+// ── initMilitaryMechanic — barracks strength bonus ────────────────────────────
+
+describe('initMilitaryMechanic — barracks strength bonus', () => {
+  it('army raised without barracks has base strength', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore()
+    initMilitaryMechanic(bus, store)
+    bus.emit('construction:complete', {
+      jobId: 'j1' as JobId, ownerId, locationId,
+      buildableType: 'army', completedFrame: 1, metadata: {},
+    })
+    const army = Object.values(store.getSlice('military').armies)[0]
+    expect(army.strength).toBe(DEFAULT_MILITARY_CONFIG.army.strength)
+  })
+
+  it('army raised in province with barracks gets strength bonus', () => {
+    const barracks = makeBuilding('b1', locationId, 'barracks')
+    const bus      = makeMockEventBus()
+    const store    = makeStateStore([barracks])
+    initMilitaryMechanic(bus, store)
+    bus.emit('construction:complete', {
+      jobId: 'j1' as JobId, ownerId, locationId,
+      buildableType: 'army', completedFrame: 1, metadata: {},
+    })
+    const army = Object.values(store.getSlice('military').armies)[0]
+    const expected = DEFAULT_MILITARY_CONFIG.army.strength + DEFAULT_MILITARY_CONFIG.army.barracksStrengthBonus
+    expect(army.strength).toBe(expected)
+  })
+
+  it('barracks in a different province does not grant the bonus', () => {
+    const barracks = makeBuilding('b1', 'other-province' as ProvinceId, 'barracks')
+    const bus      = makeMockEventBus()
+    const store    = makeStateStore([barracks])
+    initMilitaryMechanic(bus, store)
+    bus.emit('construction:complete', {
+      jobId: 'j1' as JobId, ownerId, locationId,
+      buildableType: 'army', completedFrame: 1, metadata: {},
+    })
+    const army = Object.values(store.getSlice('military').armies)[0]
+    expect(army.strength).toBe(DEFAULT_MILITARY_CONFIG.army.strength)
+  })
+
+  it('non-barracks buildings in the province do not grant the bonus', () => {
+    const farm = makeBuilding('f1', locationId, 'farm')
+    const bus  = makeMockEventBus()
+    const store = makeStateStore([farm])
+    initMilitaryMechanic(bus, store)
+    bus.emit('construction:complete', {
+      jobId: 'j1' as JobId, ownerId, locationId,
+      buildableType: 'army', completedFrame: 1, metadata: {},
+    })
+    const army = Object.values(store.getSlice('military').armies)[0]
+    expect(army.strength).toBe(DEFAULT_MILITARY_CONFIG.army.strength)
+  })
+
+  it('bonus applies only once regardless of how many barracks are in the province', () => {
+    const b1  = makeBuilding('b1', locationId, 'barracks')
+    const b2  = makeBuilding('b2', locationId, 'barracks')
+    const bus = makeMockEventBus()
+    const store = makeStateStore([b1, b2])
+    initMilitaryMechanic(bus, store)
+    bus.emit('construction:complete', {
+      jobId: 'j1' as JobId, ownerId, locationId,
+      buildableType: 'army', completedFrame: 1, metadata: {},
+    })
+    const army = Object.values(store.getSlice('military').armies)[0]
+    const expected = DEFAULT_MILITARY_CONFIG.army.strength + DEFAULT_MILITARY_CONFIG.army.barracksStrengthBonus
+    expect(army.strength).toBe(expected)
   })
 })

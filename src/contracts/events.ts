@@ -106,6 +106,12 @@ export interface EventMap {
     readonly provinceId: ProvinceId
     readonly buildingType: BuildingType
   }
+  'buildings:building-destroyed': {
+    readonly buildingId: BuildingId
+    readonly countryId: CountryId
+    readonly provinceId: ProvinceId
+    readonly buildingType: BuildingType
+  }
   'buildings:build-rejected': {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId

@@ -29,6 +29,7 @@ the economy mechanic so that farms and ports generate gold each cycle.
 | `construction:request` | `{ jobId, ownerId, locationId, buildableType: 'building', durationFrames, metadata: { buildingType } }` | When `requestBuildBuilding` passes all validation |
 | `buildings:build-rejected` | `{ countryId, provinceId, buildingType, reason }` | When a port is placed on non-coastal land, the terrain limit is reached, or the country has insufficient gold |
 | `buildings:building-constructed` | `{ buildingId, countryId, provinceId, buildingType }` | When a building's construction job completes |
+| `buildings:building-destroyed` | `{ buildingId, countryId, provinceId, buildingType }` | When walls in a province are destroyed upon conquest (one event per wall) |
 | `economy:province-modifier-added` | `{ provinceId, modifier }` | When a building with `incomeBonus > 0` completes (farms, ports) |
 
 ## Events Consumed
@@ -36,6 +37,7 @@ the economy mechanic so that farms and ports generate gold each cycle.
 | Event name | Payload type | What the mechanic does with it |
 |------------|-------------|-------------------------------|
 | `construction:complete` | `{ buildableType, ownerId, locationId, completedFrame, metadata }` | Creates a `Building` in state, emits `buildings:building-constructed`, and emits `economy:province-modifier-added` if the building has income |
+| `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId }` | Removes all walls buildings in the conquered province from state and emits `buildings:building-destroyed` for each |
 
 ## State Slice
 
@@ -94,4 +96,8 @@ are rejected before the limit is checked.
   records who built it and never changes. Income from captured buildings goes
   to the province owner regardless of who built them — this is handled by the
   economy mechanic's province-bound modifier model.
+- **Walls are destroyed on conquest.** When a province is conquered, all walls
+  in that province are removed from state. This represents the attacker
+  dismantling fortifications to prevent future resistance. Other buildings
+  (barracks, farms, ports) survive conquest intact.
 - No update function is needed — the mechanic is purely event-driven.

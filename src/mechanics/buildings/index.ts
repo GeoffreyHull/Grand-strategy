@@ -101,7 +101,7 @@ export function initBuildingsMechanic(
   stateStore: StateStore<GameState>,
   config = DEFAULT_BUILDINGS_CONFIG,
 ): { destroy: () => void } {
-  const sub = eventBus.on('construction:complete', (payload) => {
+  const constructionSub = eventBus.on('construction:complete', (payload) => {
     if (payload.buildableType !== 'building') return
 
     const rawType = payload.metadata['buildingType']
@@ -145,5 +145,35 @@ export function initBuildingsMechanic(
     }
   })
 
-  return { destroy: () => sub.unsubscribe() }
+  // Walls in a conquered province are destroyed — they represent fortifications
+  // that the attacker tears down to prevent future resistance.
+  const conquestSub = eventBus.on('map:province-conquered', (payload) => {
+    const walls = Object.values(stateStore.getState().buildings.buildings).filter(
+      b => b.provinceId === payload.provinceId && b.buildingType === 'walls',
+    )
+
+    if (walls.length === 0) return
+
+    stateStore.setState(draft => {
+      const remaining = { ...draft.buildings.buildings }
+      for (const w of walls) delete remaining[w.id]
+      return { ...draft, buildings: { buildings: remaining } }
+    })
+
+    for (const w of walls) {
+      eventBus.emit('buildings:building-destroyed', {
+        buildingId:   w.id,
+        countryId:    w.countryId,
+        provinceId:   w.provinceId,
+        buildingType: w.buildingType,
+      })
+    }
+  })
+
+  return {
+    destroy: () => {
+      constructionSub.unsubscribe()
+      conquestSub.unsubscribe()
+    },
+  }
 }

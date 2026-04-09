@@ -1,4 +1,4 @@
-import type { BuildingType } from '@contracts/mechanics/buildings'
+import type { BuildingScope, BuildingType } from '@contracts/mechanics/buildings'
 
 export function isBuildingType(value: unknown): value is BuildingType {
   return (
@@ -7,6 +7,14 @@ export function isBuildingType(value: unknown): value is BuildingType {
     value === 'farm'     ||
     value === 'walls'
   )
+}
+
+/**
+ * Returns the scope for a building type.
+ * Farm is territory-scoped (one per hex cell); all others are province-scoped.
+ */
+export function getBuildingScope(buildingType: BuildingType): BuildingScope {
+  return buildingType === 'farm' ? 'territory' : 'province'
 }
 
 // ── Config types ──────────────────────────────────────────────────────────────

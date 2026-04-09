@@ -1,10 +1,10 @@
-import type { ProvinceId, CountryId } from './mechanics/map'
+import type { ProvinceId, CountryId, TerritoryId } from './mechanics/map'
 import type { DiplomaticStatus } from './mechanics/diplomacy'
 import type { AIDecision } from './mechanics/ai'
 import type { JobId, BuildableType } from './mechanics/construction'
 import type { ArmyId } from './mechanics/military'
 import type { FleetId } from './mechanics/navy'
-import type { BuildingId, BuildingType } from './mechanics/buildings'
+import type { BuildingId, BuildingType, BuildingScope } from './mechanics/buildings'
 import type { TechnologyId, TechnologyType } from './mechanics/technology'
 import type { IncomeModifier } from './mechanics/economy'
 
@@ -105,19 +105,25 @@ export interface EventMap {
     readonly buildingId: BuildingId
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
+    /** Present for territory-scoped buildings (e.g. farm). */
+    readonly territoryId?: TerritoryId
     readonly buildingType: BuildingType
+    readonly scope: BuildingScope
   }
   'buildings:building-destroyed': {
     readonly buildingId: BuildingId
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
+    readonly territoryId?: TerritoryId
     readonly buildingType: BuildingType
+    readonly scope: BuildingScope
   }
   'buildings:build-rejected': {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
+    readonly territoryId?: TerritoryId
     readonly buildingType: BuildingType
-    readonly reason: 'terrain-limit-reached' | 'not-coastal' | 'insufficient-gold'
+    readonly reason: 'terrain-limit-reached' | 'not-coastal' | 'insufficient-gold' | 'territory-occupied'
   }
 
   // Diplomacy mechanic events

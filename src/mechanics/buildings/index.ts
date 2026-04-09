@@ -2,18 +2,20 @@ import type { EventBus } from '../../engine/EventBus'
 import type { StateStore } from '../../engine/StateStore'
 import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
-import type { CountryId, ProvinceId } from '@contracts/mechanics/map'
+import type { CountryId, ProvinceId, TerritoryId } from '@contracts/mechanics/map'
 import type { JobId } from '@contracts/mechanics/construction'
 import type { Building, BuildingId, BuildingType } from '@contracts/mechanics/buildings'
 import {
   DEFAULT_BUILDINGS_CONFIG,
   validateBuildingsConfig,
   isBuildingType,
+  getBuildingScope,
 } from './types'
 
-export type { Building, BuildingId, BuildingType, BuildingsState } from '@contracts/mechanics/buildings'
+export type { Building, BuildingId, BuildingType, BuildingScope, BuildingsState } from '@contracts/mechanics/buildings'
+export type { TerritoryId } from '@contracts/mechanics/map'
 export type { BuildingsConfig, BuildingTypeConfig, TerrainBuildingLimits } from './types'
-export { DEFAULT_BUILDINGS_CONFIG } from './types'
+export { DEFAULT_BUILDINGS_CONFIG, getBuildingScope } from './types'
 
 export function buildBuildingsState() {
   return { buildings: {} as Record<BuildingId, Building> }
@@ -31,9 +33,14 @@ export async function loadBuildingsConfig(
 }
 
 /**
- * Request construction of a building. Validates coastal requirement for ports
- * and terrain-based building limits before emitting a construction request.
- * Emits `buildings:build-rejected` and returns early if validation fails.
+ * Request construction of a building.
+ *
+ * - Territory-scoped buildings (farm): pass `territoryId` for the target hex.
+ *   Rejected with `territory-occupied` if that hex already has a farm.
+ * - Province-scoped buildings (barracks, port, walls): no `territoryId` needed.
+ *   Validated against terrain-based limits; ports also require a coastal province.
+ *
+ * On any failure emits `buildings:build-rejected` and returns early.
  */
 export function requestBuildBuilding(
   eventBus: EventBus<EventMap>,
@@ -42,10 +49,13 @@ export function requestBuildBuilding(
   locationId: ProvinceId,
   buildingType: BuildingType,
   config = DEFAULT_BUILDINGS_CONFIG,
+  territoryId?: TerritoryId,
 ): void {
   const { map, buildings } = stateStore.getState()
   const province = map.provinces[locationId]
   if (!province) return
+
+  const scope = getBuildingScope(buildingType)
 
   // Ports require a coastal province
   if (buildingType === 'port' && !province.isCoastal) {
@@ -55,18 +65,35 @@ export function requestBuildBuilding(
     return
   }
 
-  // Check terrain-based limit for this building type
-  const terrainLimits = config.limits[province.terrainType]
-  if (terrainLimits) {
-    const limit = terrainLimits[buildingType]
-    const existing = Object.values(buildings.buildings).filter(
-      b => b.provinceId === locationId && b.buildingType === buildingType,
-    ).length
-    if (existing >= limit) {
+  if (scope === 'territory') {
+    // Territory-scoped: one building of this type per territory (hex cell)
+    if (!territoryId) return
+    const occupied = Object.values(buildings.buildings).some(
+      b => b.territoryId === territoryId && b.buildingType === buildingType,
+    )
+    if (occupied) {
       eventBus.emit('buildings:build-rejected', {
-        countryId: ownerId, provinceId: locationId, buildingType, reason: 'terrain-limit-reached',
+        countryId: ownerId, provinceId: locationId, territoryId, buildingType,
+        reason: 'territory-occupied',
       })
       return
+    }
+  } else {
+    // Province-scoped: check terrain-based limit
+    const terrainLimits = config.limits[province.terrainType]
+    if (terrainLimits) {
+      const limit = (terrainLimits as unknown as Record<string, number>)[buildingType]
+      if (limit !== undefined) {
+        const existing = Object.values(buildings.buildings).filter(
+          b => b.provinceId === locationId && b.buildingType === buildingType,
+        ).length
+        if (existing >= limit) {
+          eventBus.emit('buildings:build-rejected', {
+            countryId: ownerId, provinceId: locationId, buildingType, reason: 'terrain-limit-reached',
+          })
+          return
+        }
+      }
     }
   }
 
@@ -75,7 +102,9 @@ export function requestBuildBuilding(
   const countryEconomy = stateStore.getState().economy?.countries[ownerId]
   if (goldCost > 0 && (!countryEconomy || countryEconomy.gold < goldCost)) {
     eventBus.emit('buildings:build-rejected', {
-      countryId: ownerId, provinceId: locationId, buildingType, reason: 'insufficient-gold',
+      countryId: ownerId, provinceId: locationId,
+      ...(scope === 'territory' && territoryId ? { territoryId } : {}),
+      buildingType, reason: 'insufficient-gold',
     })
     return
   }
@@ -93,7 +122,9 @@ export function requestBuildBuilding(
     locationId,
     buildableType:  'building',
     durationFrames: config.buildings[buildingType].durationFrames,
-    metadata:       { buildingType },
+    metadata:       scope === 'territory' && territoryId
+      ? { buildingType, territoryId }
+      : { buildingType },
   })
 }
 
@@ -108,13 +139,22 @@ export function initBuildingsMechanic(
     const rawType = payload.metadata['buildingType']
     if (!isBuildingType(rawType)) return
 
+    const scope = getBuildingScope(rawType)
+    const rawTerritoryId = payload.metadata['territoryId']
+    const territoryId: TerritoryId | undefined =
+      scope === 'territory' && typeof rawTerritoryId === 'string'
+        ? rawTerritoryId as TerritoryId
+        : undefined
+
     const buildingId = crypto.randomUUID() as BuildingId
     const building: Building = {
       id:             buildingId,
       countryId:      payload.ownerId,
       provinceId:     payload.locationId,
+      ...(territoryId !== undefined ? { territoryId } : {}),
       buildingType:   rawType,
       completedFrame: payload.completedFrame,
+      scope,
     }
 
     stateStore.setState(draft => ({
@@ -126,7 +166,9 @@ export function initBuildingsMechanic(
       buildingId,
       countryId:    payload.ownerId,
       provinceId:   payload.locationId,
+      ...(territoryId !== undefined ? { territoryId } : {}),
       buildingType: rawType,
+      scope,
     })
 
     // Emit income modifier so the economy mechanic can update province income.
@@ -167,6 +209,7 @@ export function initBuildingsMechanic(
         countryId:    w.countryId,
         provinceId:   w.provinceId,
         buildingType: w.buildingType,
+        scope:        w.scope,
       })
     }
   })

@@ -14,8 +14,10 @@ Exported from `src/mechanics/map/index.ts`:
 | `initMapMechanic(canvas, eventBus, stateStore)` | Function | Wires up the renderer, interaction, and event subscriptions. Returns `{ render, destroy }`. |
 | `Province` | type | Re-exported from contracts |
 | `Country` | type | Re-exported from contracts |
+| `Territory` | type | Re-exported from contracts — represents a single hex cell |
 | `ProvinceId` | type | Re-exported from contracts |
 | `CountryId` | type | Re-exported from contracts |
+| `TerritoryId` | type | Re-exported from contracts — branded `"col,row"` string |
 
 ## Events Emitted
 
@@ -49,13 +51,23 @@ Exported from `src/mechanics/map/index.ts`:
 
 ```typescript
 interface MapState {
-  provinces: Record<ProvinceId, Province>   // all 130 provinces
-  countries:  Record<CountryId,  Country>   // all 20 nations
+  provinces:   Record<ProvinceId,  Province>   // all 130 provinces
+  countries:   Record<CountryId,   Country>    // all 20 nations
+  territories: Record<TerritoryId, Territory>  // one entry per hex cell (600 total)
   selectedProvinceId: ProvinceId | null
   hoveredProvinceId:  ProvinceId | null
-  cellIndex: Record<string, ProvinceId>     // "col,row" → ProvinceId, O(1) lookup
+  cellIndex: Record<string, ProvinceId>        // "col,row" → ProvinceId, O(1) lookup
+}
+
+interface Territory {
+  id:         TerritoryId  // "col,row" format, matching cellIndex keys
+  provinceId: ProvinceId
+  col:        number
+  row:        number
 }
 ```
+
+`TerritoryId` format is `"col,row"` — intentionally identical to the `cellIndex` key format so lookups are free.
 
 Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameState`. It is managed locally in `initMapMechanic` and never serialised.
 
@@ -109,6 +121,7 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 - **Touch gesture restart:** When one finger lifts during a two-finger gesture (pinch → single pan), the interaction seamlessly restarts a single-touch pan from the current position.
 - **Label visibility:** Province labels are shown only when `hexSize × zoom ≥ 22` effective pixels, keeping the map readable at all zoom levels.
 - **Hex geometry:** Pointy-top, odd-row offset. Cell centers computed by `HexGrid.ts`; pixel→hex inversion done via `pixelToHex`. `isPointInHex` is available but the primary interaction uses `pixelToHex` for speed.
+- **Territory model:** `buildMapState()` creates one `Territory` per hex cell. `TerritoryId` is the `"col,row"` string — the same format as `cellIndex` keys, so converting a territory to its province is `cellIndex[territory.id]` (O(1)).
 - **isCoastal derivation:** Computed automatically in `buildMapState()` — a province is coastal if any of its cells has a neighbour cell with no assigned province (ocean).
 - **Cell conflict detection:** `map.test.ts` validates that no two provinces share a cell, serving as a data integrity gate.
 - **Border rendering:** Per-edge classification: ocean edge → dark border; cross-country edge → thick black border (2.5px); cross-province edge → thin darkened-color border (0.8px). This produces the classic grand-strategy look without needing explicit border data.

@@ -3,7 +3,7 @@ import { StateStore } from './engine/StateStore'
 import { GameLoop } from './engine/GameLoop'
 import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
-import { buildMapState, initMapMechanic } from './mechanics/map/index'
+import { buildMapState, initMapMechanic, appendCombatLog } from './mechanics/map/index'
 import { buildAIState, initAIMechanic } from './mechanics/ai/index'
 import { buildConstructionState, initConstructionMechanic } from './mechanics/construction/index'
 import {
@@ -255,7 +255,8 @@ eventBus.on('diplomacy:war-declared', ({ declarerId, targetId }) => {
   const countries = stateStore.getSlice('map').countries
   const declarer  = countries[declarerId]?.name ?? declarerId
   const target    = countries[targetId]?.name ?? targetId
-  console.info(`[Diplomacy] ${declarer} declared war on ${target}`)
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${declarer} declared war on ${target}`, 'diplomacy-war', turn)
 })
 
 eventBus.on('diplomacy:war-rejected', ({ declarerId, targetId, reason }) => {
@@ -266,7 +267,8 @@ eventBus.on('diplomacy:peace-made', ({ countryA, countryB }) => {
   const countries = stateStore.getSlice('map').countries
   const nameA = countries[countryA]?.name ?? countryA
   const nameB = countries[countryB]?.name ?? countryB
-  console.info(`[Diplomacy] Peace: ${nameA} ↔ ${nameB} (5-turn truce)`)
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${nameA} and ${nameB} made peace (5-turn truce)`, 'diplomacy-peace', turn)
 })
 
 eventBus.on('diplomacy:truce-expired', ({ countryA, countryB }) => {
@@ -277,7 +279,8 @@ eventBus.on('diplomacy:alliance-formed', ({ countryA, countryB }) => {
   const countries = stateStore.getSlice('map').countries
   const nameA = countries[countryA]?.name ?? countryA
   const nameB = countries[countryB]?.name ?? countryB
-  console.info(`[Diplomacy] Alliance: ${nameA} ↔ ${nameB}`)
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${nameA} and ${nameB} formed an alliance`, 'diplomacy-alliance', turn)
 })
 
 eventBus.on('diplomacy:ally-called-to-war', ({ allyId, calledById, warTargetId }) => {
@@ -285,7 +288,8 @@ eventBus.on('diplomacy:ally-called-to-war', ({ allyId, calledById, warTargetId }
   const ally   = countries[allyId]?.name ?? allyId
   const caller = countries[calledById]?.name ?? calledById
   const target = countries[warTargetId]?.name ?? warTargetId
-  console.info(`[Diplomacy] ${ally} called to war by ally ${caller} against ${target}`)
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${ally} joins war: called by ${caller} against ${target}`, 'diplomacy-ally', turn)
 })
 
 eventBus.on('diplomacy:ally-forced-peace', ({ allyId, peaceCountryId, enemyId }) => {
@@ -293,7 +297,8 @@ eventBus.on('diplomacy:ally-forced-peace', ({ allyId, peaceCountryId, enemyId })
   const ally    = countries[allyId]?.name ?? allyId
   const peaceBy = countries[peaceCountryId]?.name ?? peaceCountryId
   const enemy   = countries[enemyId]?.name ?? enemyId
-  console.info(`[Diplomacy] ${ally} forced to peace with ${enemy} (ally ${peaceBy} made peace)`)
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${ally} forced to peace with ${enemy} (${peaceBy} made peace)`, 'diplomacy-peace', turn)
 })
 
 gameLoop.start()

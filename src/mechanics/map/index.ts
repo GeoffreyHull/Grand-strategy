@@ -63,14 +63,17 @@ export function buildMapState(): MapState {
 }
 
 /** Append an entry to the combat log panel. */
-function appendCombatLog(text: string, type: 'conquered' | 'repelled'): void {
+function appendCombatLog(text: string, type: 'conquered' | 'repelled', turn: number): void {
   const list = document.getElementById('combat-log-list')
   if (!list) return
   const empty = document.getElementById('combat-log-empty')
   if (empty) empty.remove()
   const entry = document.createElement('div')
   entry.className = `log-entry ${type}`
-  entry.textContent = text
+  const turnLabel = document.createElement('span')
+  turnLabel.className = 'log-turn'
+  turnLabel.textContent = `Turn ${turn}`
+  entry.append(turnLabel, document.createTextNode(text))
   list.prepend(entry)
   // Keep at most 50 entries
   while (list.children.length > 50) list.removeChild(list.lastChild!)
@@ -160,6 +163,9 @@ export function initMapMechanic(
   // Camera state lives here — it is pure UI state, not part of GameState.
   let camera: CameraState = { panX: 0, panY: 0, zoom: 1 }
 
+  // Track the game frame of the most recent AI decision for combat log labelling.
+  let currentDecisionFrame = 0
+
   const interaction = new MapInteraction(
     canvas,
     HEX_SIZE,
@@ -210,6 +216,7 @@ export function initMapMechanic(
   // Handle AI expansion with combat resolution
   eventBus.on('ai:decision-made', ({ decision }) => {
     if (decision.action !== 'EXPAND') return
+    currentDecisionFrame = decision.frame
 
     const mapState      = stateStore.getSlice('map')
     const militaryState = stateStore.getSlice('military')
@@ -336,6 +343,7 @@ export function initMapMechanic(
     appendCombatLog(
       `${attacker.name} captured ${province.name} from ${defender.name}`,
       'conquered',
+      Math.floor(currentDecisionFrame / 60) + 1,
     )
   })
 
@@ -348,6 +356,7 @@ export function initMapMechanic(
     appendCombatLog(
       `${defender.name} repelled ${attacker.name}'s attack on ${province.name}`,
       'repelled',
+      Math.floor(currentDecisionFrame / 60) + 1,
     )
   })
 

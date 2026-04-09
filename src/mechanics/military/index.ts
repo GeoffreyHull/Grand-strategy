@@ -12,6 +12,7 @@ import {
 
 export type { Army, ArmyId, MilitaryState } from '@contracts/mechanics/military'
 export type { MilitaryConfig } from './types'
+export { DEFAULT_MILITARY_CONFIG } from './types'
 
 export function buildMilitaryState() {
   return { armies: {} as Record<ArmyId, Army> }

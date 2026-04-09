@@ -12,6 +12,7 @@ import {
 
 export type { Fleet, FleetId, NavyState } from '@contracts/mechanics/navy'
 export type { NavyConfig } from './types'
+export { DEFAULT_NAVY_CONFIG } from './types'
 
 export function buildNavyState() {
   return { fleets: {} as Record<FleetId, Fleet> }

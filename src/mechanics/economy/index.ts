@@ -13,6 +13,7 @@ import {
 
 export type { EconomyState, ProvinceEconomy, CountryEconomy, IncomeModifier } from '@contracts/mechanics/economy'
 export type { EconomyConfig } from './types'
+export { DEFAULT_ECONOMY_CONFIG } from './types'
 
 export function buildEconomyState(): EconomyState {
   return { provinces: {}, countries: {} }

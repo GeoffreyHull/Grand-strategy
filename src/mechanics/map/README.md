@@ -38,6 +38,8 @@ Exported from `src/mechanics/map/index.ts`:
 | `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel to show updated army counts |
 | `buildings:building-constructed` | `{ buildingId, ... }` | Refreshes info panel to show updated building list |
 | `map:province-conquered` | `{ provinceId, ... }` | Refreshes info panel to reflect new ownership |
+| `diplomacy:war-declared` | `{ declarerId, targetId }` | Adds the country pair to the local `activeWars` set so province capture is permitted |
+| `diplomacy:peace-made` | `{ countryA, countryB }` | Removes the country pair from `activeWars`, blocking further province capture |
 
 *(The mechanic subscribes to its own events so state flows through a single path.)*
 
@@ -113,3 +115,4 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 - **Info panel and legend** are updated via DOM manipulation in `index.ts`; canvas rendering is pure draw-only via `MapRenderer`.
 - **Combat log turn numbers:** Each log entry displays a `Turn N` label derived from `Math.floor(frame / 60) + 1`, where 60 is the AI decision interval. This groups all attacks from the same decision cycle under the same turn number. The `.log-turn` CSS class (defined in `index.html`) styles the label as a small grey annotation above the entry text.
 - **No `any` types.** Branded `ProvinceId`/`CountryId` string types catch ID mixups at compile time.
+- **War gate:** Province capture is only permitted when an active war exists between the attacker and defender. The mechanic maintains a local `activeWars: Set<string>` (keyed by sorted country ID pair) updated via `diplomacy:war-declared` / `diplomacy:peace-made` events. This avoids a direct import of the diplomacy mechanic while still enforcing the invariant. Because the map mechanic's `ai:decision-made` handler runs before `main.ts` declares war (registration order), a country must declare war in one tick and attack in a subsequent tick — matching realistic grand-strategy behavior.

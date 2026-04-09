@@ -178,6 +178,17 @@ export function initMapMechanic(
   // Track the game frame of the most recent AI decision for combat log labelling.
   let currentDecisionFrame = 0
 
+  // Track active wars via diplomacy events so province capture can be gated on war status.
+  const activeWars = new Set<string>()
+  const warKey = (a: CountryId, b: CountryId): string => [a, b].sort().join(':')
+
+  eventBus.on('diplomacy:war-declared', ({ declarerId, targetId }) => {
+    activeWars.add(warKey(declarerId, targetId))
+  })
+  eventBus.on('diplomacy:peace-made', ({ countryA, countryB }) => {
+    activeWars.delete(warKey(countryA, countryB))
+  })
+
   const interaction = new MapInteraction(
     canvas,
     HEX_SIZE,
@@ -265,6 +276,9 @@ export function initMapMechanic(
     if (!targetProvince) return
     const oldOwnerId = targetProvince.countryId
     const newOwnerId = decision.countryId
+
+    // Province capture requires an active war — block if no war has been declared.
+    if (!activeWars.has(warKey(newOwnerId, oldOwnerId))) return
 
     // ── Combat resolution ─────────────────────────────────────────────────────
 

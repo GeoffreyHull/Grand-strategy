@@ -8,7 +8,7 @@ import type { GameState, MapState } from '@contracts/state'
 import type { MilitaryState } from '@contracts/mechanics/military'
 import type { BuildingsState } from '@contracts/mechanics/buildings'
 import type { EconomyState } from '@contracts/mechanics/economy'
-import type { Province, Country, ProvinceId, CountryId } from '@contracts/mechanics/map'
+import type { Province, Country, Territory, TerritoryId, ProvinceId, CountryId } from '@contracts/mechanics/map'
 import { cellKey, hexNeighbors } from './HexGrid'
 import { WORLD_COUNTRIES, WORLD_PROVINCES } from './WorldData'
 import { MapRenderer } from './MapRenderer'
@@ -16,20 +16,23 @@ import { MapInteraction } from './MapInteraction'
 import type { CameraState } from './Camera'
 
 // Re-export public contract types for callers that import from this mechanic.
-export type { Province, Country, ProvinceId, CountryId }
+export type { Province, Country, Territory, TerritoryId, ProvinceId, CountryId }
 
 const HEX_SIZE = 28
 
-/** Build the initial MapState from world data, deriving cellIndex and isCoastal. */
+/** Build the initial MapState from world data, deriving cellIndex, territories, and isCoastal. */
 export function buildMapState(): MapState {
-  const provinces: Record<ProvinceId, Province> = {} as Record<ProvinceId, Province>
-  const countries:  Record<CountryId,  Country>  = {} as Record<CountryId,  Country>
-  const cellIndex:  Record<string, ProvinceId>   = {}
+  const provinces:   Record<ProvinceId,  Province>  = {} as Record<ProvinceId,  Province>
+  const countries:   Record<CountryId,   Country>   = {} as Record<CountryId,   Country>
+  const territories: Record<TerritoryId, Territory> = {} as Record<TerritoryId, Territory>
+  const cellIndex:   Record<string, ProvinceId>     = {}
 
-  // Index provinces
+  // Index provinces and build one Territory per hex cell
   for (const raw of WORLD_PROVINCES) {
     for (const cell of raw.cells) {
-      cellIndex[cellKey(cell.col, cell.row)] = raw.id
+      const key = cellKey(cell.col, cell.row)
+      cellIndex[key] = raw.id
+      territories[key as TerritoryId] = { id: key as TerritoryId, provinceId: raw.id, col: cell.col, row: cell.row }
     }
     provinces[raw.id] = raw
   }
@@ -57,6 +60,7 @@ export function buildMapState(): MapState {
   return {
     provinces: derivedProvinces,
     countries,
+    territories,
     selectedProvinceId: null,
     hoveredProvinceId:  null,
     cellIndex,

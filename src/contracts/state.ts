@@ -1,4 +1,4 @@
-import type { Province, Country, ProvinceId, CountryId } from './mechanics/map'
+import type { Province, Country, Territory, ProvinceId, CountryId, TerritoryId } from './mechanics/map'
 import type { AIState } from './mechanics/ai'
 import type { ConstructionState } from './mechanics/construction'
 import type { MilitaryState } from './mechanics/military'
@@ -9,8 +9,10 @@ import type { EconomyState } from './mechanics/economy'
 import type { DiplomacyState } from './mechanics/diplomacy'
 
 export interface MapState {
-  readonly provinces: Readonly<Record<ProvinceId, Province>>
-  readonly countries:  Readonly<Record<CountryId,  Country>>
+  readonly provinces:   Readonly<Record<ProvinceId,  Province>>
+  readonly countries:   Readonly<Record<CountryId,   Country>>
+  /** Each hex cell as a Territory, keyed by "col,row" (same format as cellIndex). */
+  readonly territories: Readonly<Record<TerritoryId, Territory>>
   readonly selectedProvinceId: ProvinceId | null
   readonly hoveredProvinceId:  ProvinceId | null
   /** "col,row" → ProvinceId — O(1) cell lookup */

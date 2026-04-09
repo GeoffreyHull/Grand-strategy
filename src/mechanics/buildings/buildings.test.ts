@@ -5,9 +5,9 @@ import type { EventBus } from '../../engine/EventBus'
 import type { StateStore } from '../../engine/StateStore'
 import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
-import type { CountryId, ProvinceId, Province } from '@contracts/mechanics/map'
+import type { CountryId, ProvinceId, TerritoryId, Province } from '@contracts/mechanics/map'
 import type { JobId } from '@contracts/mechanics/construction'
-import type { Building, BuildingId, BuildingType } from '@contracts/mechanics/buildings'
+import type { Building, BuildingId, BuildingScope, BuildingType } from '@contracts/mechanics/buildings'
 
 const conqueredId  = 'conquered-province' as ProvinceId
 const otherOwner   = 'other-kingdom' as CountryId
@@ -76,13 +76,21 @@ function makeStateStore(
   } as unknown as StateStore<GameState>
 }
 
-function makeBuilding(id: string, provinceId: string, buildingType: BuildingType): Building {
+function makeBuilding(
+  id: string,
+  provinceId: string,
+  buildingType: BuildingType,
+  territoryId?: TerritoryId,
+): Building {
+  const scope: BuildingScope = buildingType === 'farm' ? 'territory' : 'province'
   return {
     id:             id as BuildingId,
     countryId:      ownerId,
     provinceId:     provinceId as ProvinceId,
+    ...(territoryId !== undefined ? { territoryId } : {}),
     buildingType,
     completedFrame: 1,
+    scope,
   }
 }
 
@@ -110,13 +118,19 @@ describe('requestBuildBuilding — event payload', () => {
   it.each<[BuildingType, number]>([
     ['barracks', 90],
     ['port', 120],
-    ['farm', 60],
     ['walls', 90],
   ])('emits correct durationFrames for %s (%i)', (buildingType, expected) => {
     const bus   = makeMockEventBus()
     const store = makeStateStore(makeProvince(locationId, 'plains', true))
     requestBuildBuilding(bus, store, ownerId, locationId, buildingType)
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: expected }))
+  })
+
+  it('emits correct durationFrames for farm (territory-scoped)', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId, 'plains', true))
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, '3,4' as TerritoryId)
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: 60 }))
   })
 
   it('includes buildingType in metadata', () => {
@@ -157,52 +171,100 @@ describe('requestBuildBuilding — coastal guard', () => {
   })
 })
 
-// ── requestBuildBuilding — terrain limits ─────────────────────────────────────
+// ── requestBuildBuilding — terrain limits (province-scoped buildings) ─────────
 
 describe('requestBuildBuilding — terrain limits', () => {
-  it('rejects a farm when the terrain limit is reached', () => {
+  it('rejects barracks when the terrain limit is reached', () => {
     const mountainProvince = makeProvince(locationId, 'mountains')
-    const limit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].farm   // 5
+    const limit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].barracks   // 2
     const existing = Array.from({ length: limit }, (_, i) =>
-      makeBuilding(`farm-${i}`, locationId, 'farm'),
+      makeBuilding(`barracks-${i}`, locationId, 'barracks'),
     )
     const bus   = makeMockEventBus()
     const store = makeStateStore(mountainProvince, existing)
-    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    requestBuildBuilding(bus, store, ownerId, locationId, 'barracks')
     expect(bus.emit).toHaveBeenCalledWith('buildings:build-rejected', expect.objectContaining({
-      buildingType: 'farm', reason: 'terrain-limit-reached',
+      buildingType: 'barracks', reason: 'terrain-limit-reached',
     }))
   })
 
-  it('allows a farm when under the terrain limit', () => {
+  it('allows barracks when under the terrain limit', () => {
     const mountainProvince = makeProvince(locationId, 'mountains')
-    const limit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].farm   // 5
+    const limit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].barracks   // 2
     const existing = Array.from({ length: limit - 1 }, (_, i) =>
-      makeBuilding(`farm-${i}`, locationId, 'farm'),
+      makeBuilding(`barracks-${i}`, locationId, 'barracks'),
     )
     const bus   = makeMockEventBus()
     const store = makeStateStore(mountainProvince, existing)
-    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    requestBuildBuilding(bus, store, ownerId, locationId, 'barracks')
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
   })
 
-  it('plains allow more farms than mountains', () => {
-    const plainsLimit   = DEFAULT_BUILDINGS_CONFIG.limits['plains'].farm
-    const mountainLimit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].farm
+  it('plains allow more barracks than mountains', () => {
+    const plainsLimit   = DEFAULT_BUILDINGS_CONFIG.limits['plains'].barracks
+    const mountainLimit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].barracks
     expect(plainsLimit).toBeGreaterThan(mountainLimit)
   })
 
   it('only counts buildings in the same province towards the limit', () => {
     const mountainProvince = makeProvince(locationId, 'mountains')
-    const limit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].farm
+    const limit = DEFAULT_BUILDINGS_CONFIG.limits['mountains'].barracks
     // Fill limit in a DIFFERENT province
     const existing = Array.from({ length: limit }, (_, i) =>
-      makeBuilding(`farm-${i}`, 'other-province', 'farm'),
+      makeBuilding(`barracks-${i}`, 'other-province', 'barracks'),
     )
     const bus   = makeMockEventBus()
     const store = makeStateStore(mountainProvince, existing)
-    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    requestBuildBuilding(bus, store, ownerId, locationId, 'barracks')
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
+  })
+})
+
+// ── requestBuildBuilding — territory-scoped buildings (farm) ──────────────────
+
+describe('requestBuildBuilding — territory occupancy (farm)', () => {
+  const tid = '3,4' as TerritoryId
+
+  it('rejects a farm when the territory already has a farm', () => {
+    const existing = [makeBuilding('farm-0', locationId, 'farm', tid)]
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), existing)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, tid)
+    expect(bus.emit).toHaveBeenCalledWith('buildings:build-rejected', expect.objectContaining({
+      buildingType: 'farm', reason: 'territory-occupied', territoryId: tid,
+    }))
+  })
+
+  it('allows a farm when the territory is unoccupied', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId))
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, tid)
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
+  })
+
+  it('allows a farm on a different territory even when another territory already has a farm', () => {
+    const otherTid = '5,6' as TerritoryId
+    const existing = [makeBuilding('farm-0', locationId, 'farm', tid)]
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), existing)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, otherTid)
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
+  })
+
+  it('silently returns when no territoryId is provided for a farm', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId))
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    expect(bus.emit).not.toHaveBeenCalled()
+  })
+
+  it('passes territoryId in construction:request metadata', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId))
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, tid)
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({
+      metadata: expect.objectContaining({ buildingType: 'farm', territoryId: tid }),
+    }))
   })
 })
 
@@ -245,17 +307,25 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     expect(store.setState).not.toHaveBeenCalled()
   })
 
-  it.each<BuildingType>(['barracks', 'port', 'farm', 'walls'])('creates a %s building in state', (buildingType) => {
+  it.each<[BuildingType, 'territory' | 'province']>([
+    ['barracks', 'province'],
+    ['port',     'province'],
+    ['farm',     'territory'],
+    ['walls',    'province'],
+  ])('creates a %s building in state with scope %s', (buildingType, expectedScope) => {
     const bus   = makeMockEventBus()
     const store = makeStateStore()
     initBuildingsMechanic(bus, store)
+    const metadata: Record<string, unknown> = { buildingType }
+    if (buildingType === 'farm') metadata['territoryId'] = '3,4'
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 5, metadata: { buildingType },
+      buildableType: 'building', completedFrame: 5, metadata,
     })
     const b = Object.values(store.getSlice('buildings').buildings)[0]
     expect(b).toBeDefined()
     expect(b.buildingType).toBe(buildingType)
+    expect(b.scope).toBe(expectedScope)
   })
 
   it('emits buildings:building-constructed with correct payload', () => {
@@ -264,10 +334,11 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 5, metadata: { buildingType: 'farm' },
+      buildableType: 'building', completedFrame: 5, metadata: { buildingType: 'farm', territoryId: '3,4' },
     })
     expect(bus.emit).toHaveBeenCalledWith('buildings:building-constructed', expect.objectContaining({
       countryId: ownerId, provinceId: locationId, buildingType: 'farm',
+      scope: 'territory', territoryId: '3,4',
     }))
   })
 
@@ -424,7 +495,7 @@ describe('requestBuildBuilding — gold cost', () => {
   it('emits economy:gold-deducted before construction:request', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore(makeProvince(locationId), [], 1000)
-    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, '3,4' as TerritoryId)
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0])
     const deductIdx     = calls.indexOf('economy:gold-deducted')
     const constructIdx  = calls.indexOf('construction:request')
@@ -445,7 +516,7 @@ describe('requestBuildBuilding — gold cost', () => {
     const cost  = DEFAULT_BUILDINGS_CONFIG.buildings.farm.goldCost
     const bus   = makeMockEventBus()
     const store = makeStateStore(makeProvince(locationId), [], cost - 1)
-    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, '3,4' as TerritoryId)
     expect(bus.emit).toHaveBeenCalledWith('buildings:build-rejected', expect.objectContaining({
       reason: 'insufficient-gold',
     }))
@@ -455,7 +526,7 @@ describe('requestBuildBuilding — gold cost', () => {
     const cost  = DEFAULT_BUILDINGS_CONFIG.buildings.farm.goldCost
     const bus   = makeMockEventBus()
     const store = makeStateStore(makeProvince(locationId), [], cost)
-    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, '3,4' as TerritoryId)
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
   })
 })

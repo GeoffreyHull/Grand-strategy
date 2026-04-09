@@ -7,6 +7,7 @@ import type { EventMap } from '@contracts/events'
 import type { GameState, MapState } from '@contracts/state'
 import type { MilitaryState } from '@contracts/mechanics/military'
 import type { BuildingsState } from '@contracts/mechanics/buildings'
+import type { EconomyState } from '@contracts/mechanics/economy'
 import type { Province, Country, ProvinceId, CountryId } from '@contracts/mechanics/map'
 import { cellKey, hexNeighbors } from './HexGrid'
 import { WORLD_COUNTRIES, WORLD_PROVINCES } from './WorldData'
@@ -102,6 +103,7 @@ function updateInfoPanel(
   map: Readonly<MapState>,
   military: Readonly<MilitaryState>,
   buildings: Readonly<BuildingsState>,
+  economy: Readonly<EconomyState>,
 ): void {
   const panel = document.getElementById('info-panel')
   if (!panel) return
@@ -130,21 +132,29 @@ function updateInfoPanel(
   const countryArmies    = Object.values(military.armies).filter(a => a.countryId === country.id)
   const countryBuildings = Object.values(buildings.buildings).filter(b => b.countryId === country.id)
 
+  // Economy data
+  const countryEconomy = economy.countries[country.id]
+  const gold = countryEconomy?.gold ?? 0
+  const totalIncome = country.provinceIds.reduce((sum, pid) => {
+    return sum + (economy.provinces[pid]?.currentIncome ?? 0)
+  }, 0)
+
   panel.className = ''
   panel.innerHTML = `
+    <div class="panel-section-label">Nation</div>
+    <h2><span class="country-dot" style="background:${country.color}"></span>${country.name}</h2>
+    <div class="field"><span>Provinces</span><span>${country.provinceIds.length}</span></div>
+    <div class="field"><span>Armies</span><span>${countryArmies.length} (str ${countryArmies.reduce((s, a) => s + a.strength, 0)})</span></div>
+    <div class="field"><span>Buildings</span><span>${countryBuildings.length}</span></div>
+    <div class="field"><span>Gold</span><span>${Math.floor(gold)} &#9775;</span></div>
+    <div class="field"><span>Income</span><span>+${totalIncome.toFixed(1)} / turn</span></div>
+    <div style="border-top:1px solid #2a3a5a;margin:6px 0 4px"></div>
+    <div class="panel-section-label">Province</div>
     <h2>${province.name}${isCapital ? ' ★' : ''}</h2>
-    <div class="field">
-      <span>Nation</span>
-      <span><span class="country-dot" style="background:${country.color}"></span>${country.name}</span>
-    </div>
     <div class="field"><span>Terrain</span><span>${capitalise(province.terrainType)}</span></div>
     <div class="field"><span>Coastal</span><span>${province.isCoastal ? 'Yes' : 'No'}</span></div>
     <div class="field"><span>Armies</span><span>${provinceArmies.length > 0 ? `${provinceArmies.length} (str ${armyStrength})` : 'None'}</span></div>
     <div class="field"><span>Buildings</span><span>${buildingNames}</span></div>
-    <div style="border-top:1px solid #2a3a5a;margin:6px 0 4px"></div>
-    <div class="field"><span>Provinces</span><span>${country.provinceIds.length}</span></div>
-    <div class="field"><span>Armies</span><span>${countryArmies.length} (str ${countryArmies.reduce((s, a) => s + a.strength, 0)})</span></div>
-    <div class="field"><span>Buildings</span><span>${countryBuildings.length}</span></div>
   `
 }
 
@@ -187,7 +197,7 @@ export function initMapMechanic(
 
   function refreshPanel(): void {
     const s = stateStore.getState()
-    updateInfoPanel(s.map, s.military, s.buildings)
+    updateInfoPanel(s.map, s.military, s.buildings, s.economy)
   }
 
   // React to hover events
@@ -208,10 +218,12 @@ export function initMapMechanic(
     refreshPanel()
   })
 
-  // Refresh panel when armies or buildings change
+  // Refresh panel when armies, buildings, or economy change
   eventBus.on('military:army-raised', refreshPanel)
   eventBus.on('buildings:building-constructed', refreshPanel)
   eventBus.on('map:province-conquered', refreshPanel)
+  eventBus.on('economy:income-collected', refreshPanel)
+  eventBus.on('economy:gold-deducted', refreshPanel)
 
   // Handle AI expansion with combat resolution
   eventBus.on('ai:decision-made', ({ decision }) => {

@@ -53,6 +53,11 @@ export interface EventMap {
     readonly amount: number
     readonly frame: number
   }
+  'economy:gold-deducted': {
+    readonly countryId: CountryId
+    readonly amount: number
+    readonly reason: string
+  }
   'economy:province-modifier-added': {
     readonly provinceId: ProvinceId
     readonly modifier: IncomeModifier
@@ -105,7 +110,7 @@ export interface EventMap {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
     readonly buildingType: BuildingType
-    readonly reason: 'terrain-limit-reached' | 'not-coastal'
+    readonly reason: 'terrain-limit-reached' | 'not-coastal' | 'insufficient-gold'
   }
 
   // Technology mechanic events

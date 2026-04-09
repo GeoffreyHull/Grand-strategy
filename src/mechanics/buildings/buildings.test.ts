@@ -43,7 +43,11 @@ function makeProvince(
   return { id: id as ProvinceId, name: id, countryId: 'owner' as CountryId, cells: [], isCoastal, terrainType }
 }
 
-function makeStateStore(province = makeProvince(locationId), existingBuildings: Building[] = []) {
+function makeStateStore(
+  province = makeProvince(locationId),
+  existingBuildings: Building[] = [],
+  countryGold = 1000,
+) {
   const buildingMap = Object.fromEntries(existingBuildings.map(b => [b.id, b])) as Record<BuildingId, Building>
 
   let state: GameState = {
@@ -55,6 +59,10 @@ function makeStateStore(province = makeProvince(locationId), existingBuildings: 
       cellIndex: {},
     },
     buildings: { buildings: buildingMap },
+    economy: {
+      provinces: {},
+      countries: { [ownerId]: { gold: countryGold, modifiers: [] } },
+    },
   } as unknown as GameState
 
   return {
@@ -376,5 +384,75 @@ describe('initBuildingsMechanic — destroy', () => {
       buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'barracks' },
     })
     expect(store.setState).not.toHaveBeenCalled()
+  })
+})
+
+// ── requestBuildBuilding — gold cost ──────────────────────────────────────────
+
+describe('requestBuildBuilding — gold cost', () => {
+  it('rejects with insufficient-gold when country cannot afford the building', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [], 0)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'barracks')
+    expect(bus.emit).toHaveBeenCalledWith('buildings:build-rejected', expect.objectContaining({
+      buildingType: 'barracks', reason: 'insufficient-gold',
+    }))
+  })
+
+  it('does not emit construction:request when gold is insufficient', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [], 0)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'barracks')
+    const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
+    expect(calls.some((c: unknown[]) => c[0] === 'construction:request')).toBe(false)
+  })
+
+  it('emits economy:gold-deducted with the correct amount when gold is sufficient', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [], 1000)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'barracks')
+    expect(bus.emit).toHaveBeenCalledWith('economy:gold-deducted', expect.objectContaining({
+      countryId: ownerId,
+      amount:    DEFAULT_BUILDINGS_CONFIG.buildings.barracks.goldCost,
+      reason:    'building:barracks',
+    }))
+  })
+
+  it('emits economy:gold-deducted before construction:request', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [], 1000)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0])
+    const deductIdx     = calls.indexOf('economy:gold-deducted')
+    const constructIdx  = calls.indexOf('construction:request')
+    expect(deductIdx).toBeGreaterThanOrEqual(0)
+    expect(deductIdx).toBeLessThan(constructIdx)
+  })
+
+  it.each<[BuildingType, number]>([
+    ['barracks', 50],
+    ['port',     75],
+    ['farm',     30],
+    ['walls',    60],
+  ])('%s costs %i gold', (buildingType, cost) => {
+    expect(DEFAULT_BUILDINGS_CONFIG.buildings[buildingType].goldCost).toBe(cost)
+  })
+
+  it('rejects with insufficient-gold when gold is exactly one below cost', () => {
+    const cost  = DEFAULT_BUILDINGS_CONFIG.buildings.farm.goldCost
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [], cost - 1)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    expect(bus.emit).toHaveBeenCalledWith('buildings:build-rejected', expect.objectContaining({
+      reason: 'insufficient-gold',
+    }))
+  })
+
+  it('allows construction when gold equals the cost exactly', () => {
+    const cost  = DEFAULT_BUILDINGS_CONFIG.buildings.farm.goldCost
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [], cost)
+    requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
   })
 })

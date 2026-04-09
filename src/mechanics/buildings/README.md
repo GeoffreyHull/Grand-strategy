@@ -3,9 +3,9 @@
 ## Purpose
 
 Manages province buildings (barracks, ports, farms, walls). Validates coastal
-requirements and terrain-based building limits before requesting construction.
-On completion, registers income modifiers with the economy mechanic so that
-farms and ports generate gold each cycle.
+requirements, terrain-based building limits, and upfront gold affordability
+before requesting construction. On completion, registers income modifiers with
+the economy mechanic so that farms and ports generate gold each cycle.
 
 ## Public API
 
@@ -25,8 +25,9 @@ farms and ports generate gold each cycle.
 
 | Event name | Payload type | When it fires |
 |------------|-------------|---------------|
+| `economy:gold-deducted` | `{ countryId, amount, reason }` | Immediately before `construction:request` when gold cost > 0; `reason` is `building:<type>` |
 | `construction:request` | `{ jobId, ownerId, locationId, buildableType: 'building', durationFrames, metadata: { buildingType } }` | When `requestBuildBuilding` passes all validation |
-| `buildings:build-rejected` | `{ countryId, provinceId, buildingType, reason }` | When a port is placed on non-coastal land, or the terrain limit for that building type is reached |
+| `buildings:build-rejected` | `{ countryId, provinceId, buildingType, reason }` | When a port is placed on non-coastal land, the terrain limit is reached, or the country has insufficient gold |
 | `buildings:building-constructed` | `{ buildingId, countryId, provinceId, buildingType }` | When a building's construction job completes |
 | `economy:province-modifier-added` | `{ provinceId, modifier }` | When a building with `incomeBonus > 0` completes (farms, ports) |
 
@@ -56,12 +57,12 @@ interface Building {
 
 ## Building Properties (defaults)
 
-| Building | Duration | Income bonus | Notes |
-|----------|----------|-------------|-------|
-| `farm`     | 60 frames (3 s)   | +10 gold/cycle | Terrain-capped |
-| `port`     | 120 frames (6 s)  | +15 gold/cycle | Requires coastal province |
-| `barracks` | 90 frames (4.5 s) | 0 | Military building |
-| `walls`    | 90 frames (4.5 s) | 0 | Defensive building |
+| Building | Duration | Gold cost | Income bonus | Notes |
+|----------|----------|-----------|-------------|-------|
+| `farm`     | 60 frames (3 s)   | 30 gold | +10 gold/cycle | Terrain-capped |
+| `port`     | 120 frames (6 s)  | 75 gold | +15 gold/cycle | Requires coastal province |
+| `barracks` | 90 frames (4.5 s) | 50 gold | 0 | Military building |
+| `walls`    | 90 frames (4.5 s) | 60 gold | 0 | Defensive building |
 
 ## Terrain Building Limits (defaults)
 
@@ -80,9 +81,12 @@ are rejected before the limit is checked.
 
 ## Design Notes
 
-- **`requestBuildBuilding` now requires `stateStore`** to read province terrain
-  and existing building counts. This is a targeted read (province + buildings
-  slice) rather than a global dependency.
+- **`requestBuildBuilding` now requires `stateStore`** to read province terrain,
+  existing building counts, and country gold. This is a targeted read (province +
+  buildings + economy slices) rather than a global dependency.
+- **Gold is deducted upfront at request time**, not on completion. This prevents
+  race conditions where the same gold is spent on multiple buildings. The mechanic
+  emits `economy:gold-deducted`; the economy mechanic owns the state mutation.
 - **Income is registered, not computed.** The buildings mechanic tells the
   economy mechanic what income a building adds (`economy:province-modifier-added`)
   using the `incomeBonus` from config. The economy mechanic owns the math.

@@ -1,6 +1,7 @@
 {
   "army": {
     "durationFrames": 60,
-    "strength": 100
+    "strength": 100,
+    "barracksStrengthBonus": 25
   }
 }

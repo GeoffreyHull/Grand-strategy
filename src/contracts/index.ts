@@ -49,5 +49,11 @@ export type {
   TechnologyState,
 } from './mechanics/technology'
 
+export type {
+  DiplomaticStatus,
+  DiplomaticRelation,
+  DiplomacyState,
+} from './mechanics/diplomacy'
+
 export type { EventMap } from './events'
 export type { MapState, GameState } from './state'

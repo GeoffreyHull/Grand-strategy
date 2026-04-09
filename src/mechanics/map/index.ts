@@ -63,8 +63,10 @@ export function buildMapState(): MapState {
   }
 }
 
+export type LogEntryType = 'conquered' | 'repelled' | 'diplomacy-war' | 'diplomacy-peace' | 'diplomacy-alliance' | 'diplomacy-ally'
+
 /** Append an entry to the combat log panel. */
-function appendCombatLog(text: string, type: 'conquered' | 'repelled', turn: number): void {
+export function appendCombatLog(text: string, type: LogEntryType, turn: number): void {
   const list = document.getElementById('combat-log-list')
   if (!list) return
   const empty = document.getElementById('combat-log-empty')

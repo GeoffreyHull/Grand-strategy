@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Grand Strategy</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -154,7 +154,7 @@
 
     #combat-log {
       position: absolute;
-      bottom: 12px; right: 12px;
+      bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 12px)); right: 12px;
       background: rgba(10, 15, 26, 0.88);
       border: 1px solid #4a6a9a;
       border-radius: 4px;
@@ -244,6 +244,30 @@
       background: rgba(41, 128, 185, 0.1);
     }
 
+    .log-entry.diplomacy-war {
+      color: #e07b54;
+      border-left-color: #c0392b;
+      background: rgba(192, 57, 43, 0.08);
+    }
+
+    .log-entry.diplomacy-peace {
+      color: #7ec8a0;
+      border-left-color: #27ae60;
+      background: rgba(39, 174, 96, 0.08);
+    }
+
+    .log-entry.diplomacy-alliance {
+      color: #c39bd3;
+      border-left-color: #8e44ad;
+      background: rgba(142, 68, 173, 0.08);
+    }
+
+    .log-entry.diplomacy-ally {
+      color: #f0c060;
+      border-left-color: #e67e22;
+      background: rgba(230, 126, 34, 0.08);
+    }
+
     .log-entry .log-turn {
       color: #6a7a9a;
       font-size: 9px;
@@ -306,12 +330,12 @@
     </div>
     <div id="combat-log">
       <div id="combat-log-header" title="Click to expand/collapse">
-        <h3>Combat Log</h3>
+        <h3>War Log</h3>
         <span id="combat-log-toggle">▼</span>
       </div>
       <div id="combat-log-body">
         <div id="combat-log-list">
-          <span id="combat-log-empty">No battles yet.</span>
+          <span id="combat-log-empty">No events yet.</span>
         </div>
       </div>
     </div>

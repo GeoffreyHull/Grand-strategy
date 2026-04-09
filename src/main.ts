@@ -194,13 +194,10 @@ eventBus.on('ai:decision-made', ({ decision }) => {
     .filter((p): p is NonNullable<typeof p> => p !== undefined)
 
   if (action === 'EXPAND') {
-    // Declare war on a neighbouring country if possible
+    // Declare war on the target country; declareWar handles all guard checks internally
+    // (truce-active, already-at-war, allied) and emits war-rejected if blocked.
     if (decision.targetCountryId !== null) {
-      const targetId = decision.targetCountryId
-      if (diplomacyMechanic.canAttack(countryId, targetId) || true) {
-        // declareWar handles all guard checks internally; it emits war-rejected if blocked
-        diplomacyMechanic.declareWar(countryId, targetId)
-      }
+      diplomacyMechanic.declareWar(countryId, decision.targetCountryId)
     }
 
   } else if (action === 'FORTIFY') {

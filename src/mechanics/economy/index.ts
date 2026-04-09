@@ -178,6 +178,23 @@ export function initEconomyMechanic(
     recomputeProvince(payload.provinceId)
   })
 
+  const goldDeductedSub = eventBus.on('economy:gold-deducted', (payload) => {
+    stateStore.setState(draft => {
+      const existing = draft.economy.countries[payload.countryId]
+      if (!existing) return draft
+      return {
+        ...draft,
+        economy: {
+          ...draft.economy,
+          countries: {
+            ...draft.economy.countries,
+            [payload.countryId]: { ...existing, gold: existing.gold - payload.amount },
+          },
+        },
+      }
+    })
+  })
+
   // ── Update tick ──────────────────────────────────────────────────────────────
 
   function update(ctx: TickContext): void {
@@ -225,6 +242,7 @@ export function initEconomyMechanic(
       ownerModAddedSub.unsubscribe()
       ownerModRemovedSub.unsubscribe()
       conquestSub.unsubscribe()
+      goldDeductedSub.unsubscribe()
     },
   }
 }

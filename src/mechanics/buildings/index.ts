@@ -69,6 +69,23 @@ export function requestBuildBuilding(
     }
   }
 
+  // Check country has enough gold to pay the upfront cost
+  const goldCost = config.buildings[buildingType].goldCost
+  const countryEconomy = stateStore.getState().economy?.countries[ownerId]
+  if (goldCost > 0 && (!countryEconomy || countryEconomy.gold < goldCost)) {
+    eventBus.emit('buildings:build-rejected', {
+      countryId: ownerId, provinceId: locationId, buildingType, reason: 'insufficient-gold',
+    })
+    return
+  }
+
+  // Deduct gold before enqueuing construction
+  if (goldCost > 0) {
+    eventBus.emit('economy:gold-deducted', {
+      countryId: ownerId, amount: goldCost, reason: `building:${buildingType}`,
+    })
+  }
+
   eventBus.emit('construction:request', {
     jobId:          crypto.randomUUID() as JobId,
     ownerId,

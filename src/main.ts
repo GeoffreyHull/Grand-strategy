@@ -38,6 +38,10 @@ import {
   loadEconomyConfig,
   DEFAULT_ECONOMY_CONFIG,
 } from './mechanics/economy/index'
+import {
+  buildDiplomacyState,
+  initDiplomacy,
+} from './mechanics/diplomacy/index'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
@@ -120,6 +124,7 @@ const stateStore = new StateStore<GameState>({
   buildings:    buildBuildingsState(),
   technology:   buildTechnologyState(),
   economy:      buildEconomyState(),
+  diplomacy:    buildDiplomacyState(),
 })
 const gameLoop = new GameLoop(20)
 
@@ -150,6 +155,11 @@ initTechnologyMechanic(eventBus, stateStore, technologyConfig)
 
 const economyMechanic = initEconomyMechanic(eventBus, stateStore, economyConfig)
 gameLoop.addUpdateSystem(economyMechanic.update)
+
+// ── Diplomacy mechanic ────────────────────────────────────────────────────────
+
+const diplomacyMechanic = initDiplomacy(eventBus, stateStore)
+gameLoop.addUpdateSystem(diplomacyMechanic.update)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -183,13 +193,26 @@ eventBus.on('ai:decision-made', ({ decision }) => {
     .map(id => mapState.provinces[id])
     .filter((p): p is NonNullable<typeof p> => p !== undefined)
 
-  if (action === 'FORTIFY') {
+  if (action === 'EXPAND') {
+    // Declare war on a neighbouring country if possible
+    if (decision.targetCountryId !== null) {
+      const targetId = decision.targetCountryId
+      if (diplomacyMechanic.canAttack(countryId, targetId) || true) {
+        // declareWar handles all guard checks internally; it emits war-rejected if blocked
+        diplomacyMechanic.declareWar(countryId, targetId)
+      }
+    }
+
+  } else if (action === 'FORTIFY') {
     // Raise an army in a random owned province
     const target = provinces[Math.floor(Math.random() * provinces.length)]
     requestBuildArmy(eventBus, countryId, target.id, militaryConfig)
 
   } else if (action === 'ALLY') {
-    // Build a port on a coastal province, otherwise a farm
+    // Form an alliance with the target country, then build infrastructure
+    if (decision.targetCountryId !== null) {
+      diplomacyMechanic.formAlliance(countryId, decision.targetCountryId)
+    }
     const coastals = provinces.filter(p => p.isCoastal)
     const target   = coastals.length > 0
       ? coastals[Math.floor(Math.random() * coastals.length)]
@@ -226,6 +249,51 @@ eventBus.on('economy:income-collected', ({ countryId, amount }) => {
 
 eventBus.on('buildings:build-rejected', ({ countryId, provinceId, buildingType, reason }) => {
   console.debug(`[Buildings] ${buildingType} rejected in ${provinceId} for ${countryId}: ${reason}`)
+})
+
+eventBus.on('diplomacy:war-declared', ({ declarerId, targetId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const declarer  = countries[declarerId]?.name ?? declarerId
+  const target    = countries[targetId]?.name ?? targetId
+  console.info(`[Diplomacy] ${declarer} declared war on ${target}`)
+})
+
+eventBus.on('diplomacy:war-rejected', ({ declarerId, targetId, reason }) => {
+  console.debug(`[Diplomacy] War rejected: ${declarerId} → ${targetId} (${reason})`)
+})
+
+eventBus.on('diplomacy:peace-made', ({ countryA, countryB }) => {
+  const countries = stateStore.getSlice('map').countries
+  const nameA = countries[countryA]?.name ?? countryA
+  const nameB = countries[countryB]?.name ?? countryB
+  console.info(`[Diplomacy] Peace: ${nameA} ↔ ${nameB} (5-turn truce)`)
+})
+
+eventBus.on('diplomacy:truce-expired', ({ countryA, countryB }) => {
+  console.debug(`[Diplomacy] Truce expired: ${countryA} ↔ ${countryB}`)
+})
+
+eventBus.on('diplomacy:alliance-formed', ({ countryA, countryB }) => {
+  const countries = stateStore.getSlice('map').countries
+  const nameA = countries[countryA]?.name ?? countryA
+  const nameB = countries[countryB]?.name ?? countryB
+  console.info(`[Diplomacy] Alliance: ${nameA} ↔ ${nameB}`)
+})
+
+eventBus.on('diplomacy:ally-called-to-war', ({ allyId, calledById, warTargetId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const ally   = countries[allyId]?.name ?? allyId
+  const caller = countries[calledById]?.name ?? calledById
+  const target = countries[warTargetId]?.name ?? warTargetId
+  console.info(`[Diplomacy] ${ally} called to war by ally ${caller} against ${target}`)
+})
+
+eventBus.on('diplomacy:ally-forced-peace', ({ allyId, peaceCountryId, enemyId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const ally    = countries[allyId]?.name ?? allyId
+  const peaceBy = countries[peaceCountryId]?.name ?? peaceCountryId
+  const enemy   = countries[enemyId]?.name ?? enemyId
+  console.info(`[Diplomacy] ${ally} forced to peace with ${enemy} (ally ${peaceBy} made peace)`)
 })
 
 gameLoop.start()

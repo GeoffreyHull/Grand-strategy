@@ -1,4 +1,5 @@
 import type { ProvinceId, CountryId } from './mechanics/map'
+import type { DiplomaticStatus } from './mechanics/diplomacy'
 import type { AIDecision } from './mechanics/ai'
 import type { JobId, BuildableType } from './mechanics/construction'
 import type { ArmyId } from './mechanics/military'
@@ -117,6 +118,49 @@ export interface EventMap {
     readonly provinceId: ProvinceId
     readonly buildingType: BuildingType
     readonly reason: 'terrain-limit-reached' | 'not-coastal' | 'insufficient-gold'
+  }
+
+  // Diplomacy mechanic events
+  'diplomacy:war-declared': {
+    readonly declarerId: CountryId
+    readonly targetId: CountryId
+  }
+  'diplomacy:war-rejected': {
+    readonly declarerId: CountryId
+    readonly targetId: CountryId
+    readonly reason: 'truce-active' | 'already-at-war' | 'allied'
+  }
+  'diplomacy:peace-made': {
+    readonly countryA: CountryId
+    readonly countryB: CountryId
+  }
+  'diplomacy:truce-expired': {
+    readonly countryA: CountryId
+    readonly countryB: CountryId
+  }
+  'diplomacy:ally-called-to-war': {
+    readonly allyId: CountryId
+    readonly calledById: CountryId
+    readonly warTargetId: CountryId
+  }
+  'diplomacy:ally-forced-peace': {
+    readonly allyId: CountryId
+    readonly peaceCountryId: CountryId
+    readonly enemyId: CountryId
+  }
+  'diplomacy:non-aggression-pact-signed': {
+    readonly countryA: CountryId
+    readonly countryB: CountryId
+  }
+  'diplomacy:alliance-formed': {
+    readonly countryA: CountryId
+    readonly countryB: CountryId
+  }
+  'diplomacy:relation-changed': {
+    readonly countryA: CountryId
+    readonly countryB: CountryId
+    readonly oldStatus: DiplomaticStatus | 'neutral'
+    readonly newStatus: DiplomaticStatus
   }
 
   // Technology mechanic events

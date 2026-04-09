@@ -34,7 +34,7 @@ Exported from `src/mechanics/map/index.ts`:
 |---|---|---|
 | `map:province-hovered` | `{ provinceId \| null }` | Updates `hoveredProvinceId` in state; refreshes info panel |
 | `map:province-selected` | `{ provinceId, countryId }` | Updates `selectedProvinceId` in state; refreshes info panel |
-| `ai:decision-made` | `{ decision }` | On `EXPAND`: runs combat resolution against a random neighbouring province. Attacker uses armies in adjacent provinces + base 50; defender uses armies in target province × terrain multiplier (plains 1.0, hills 1.3, mountains 1.6, forest 1.2, tundra 1.1, desert 0.9) + walls bonus 60 + base 20. Attacker win → `map:province-conquered`; defender win → `map:province-attack-repelled` |
+| `ai:decision-made` | `{ decision }` | On `EXPAND`: captures `decision.frame` for combat log turn labelling, then runs combat resolution against a random neighbouring province. Attacker uses armies in adjacent provinces + base 50; defender uses armies in target province × terrain multiplier (plains 1.0, hills 1.3, mountains 1.6, forest 1.2, tundra 1.1, desert 0.9) + walls bonus 60 + base 20. Attacker win → `map:province-conquered`; defender win → `map:province-attack-repelled` |
 | `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel to show updated army counts |
 | `buildings:building-constructed` | `{ buildingId, ... }` | Refreshes info panel to show updated building list |
 | `map:province-conquered` | `{ provinceId, ... }` | Refreshes info panel to reflect new ownership |
@@ -111,4 +111,5 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 - **Cell conflict detection:** `map.test.ts` validates that no two provinces share a cell, serving as a data integrity gate.
 - **Border rendering:** Per-edge classification: ocean edge → dark border; cross-country edge → thick black border (2.5px); cross-province edge → thin darkened-color border (0.8px). This produces the classic grand-strategy look without needing explicit border data.
 - **Info panel and legend** are updated via DOM manipulation in `index.ts`; canvas rendering is pure draw-only via `MapRenderer`.
+- **Combat log turn numbers:** Each log entry displays a `Turn N` label derived from `Math.floor(frame / 60) + 1`, where 60 is the AI decision interval. This groups all attacks from the same decision cycle under the same turn number. The `.log-turn` CSS class (defined in `index.html`) styles the label as a small grey annotation above the entry text.
 - **No `any` types.** Branded `ProvinceId`/`CountryId` string types catch ID mixups at compile time.

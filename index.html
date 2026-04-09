@@ -117,6 +117,13 @@
       transform: rotate(-90deg);
     }
 
+    #legend.collapsed #legend-header:hover {
+      background: rgba(74, 106, 154, 0.25);
+      border-radius: 3px;
+      margin: -3px -4px;
+      padding: 3px 4px;
+    }
+
     #legend-body {
       overflow: hidden;
       transition: max-height 0.25s ease, opacity 0.2s ease;
@@ -172,6 +179,13 @@
 
     #combat-log.collapsed #combat-log-toggle {
       transform: rotate(-90deg);
+    }
+
+    #combat-log.collapsed #combat-log-header:hover {
+      background: rgba(74, 106, 154, 0.25);
+      border-radius: 3px;
+      margin: -3px -4px;
+      padding: 3px 4px;
     }
 
     #combat-log-body {
@@ -272,7 +286,7 @@
       <p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>
     </div>
     <div id="legend">
-      <div id="legend-header">
+      <div id="legend-header" title="Click to expand/collapse">
         <h3>Nations</h3>
         <span id="legend-toggle">▼</span>
       </div>
@@ -281,7 +295,7 @@
       </div>
     </div>
     <div id="combat-log">
-      <div id="combat-log-header">
+      <div id="combat-log-header" title="Click to expand/collapse">
         <h3>Combat Log</h3>
         <span id="combat-log-toggle">▼</span>
       </div>

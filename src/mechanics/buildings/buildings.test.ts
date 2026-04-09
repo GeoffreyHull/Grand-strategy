@@ -9,6 +9,9 @@ import type { CountryId, ProvinceId, Province } from '@contracts/mechanics/map'
 import type { JobId } from '@contracts/mechanics/construction'
 import type { Building, BuildingId, BuildingType } from '@contracts/mechanics/buildings'
 
+const conqueredId  = 'conquered-province' as ProvinceId
+const otherOwner   = 'other-kingdom' as CountryId
+
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
 type Handler<K extends keyof EventMap> = (payload: EventMap[K]) => void
@@ -454,5 +457,100 @@ describe('requestBuildBuilding — gold cost', () => {
     const store = makeStateStore(makeProvince(locationId), [], cost)
     requestBuildBuilding(bus, store, ownerId, locationId, 'farm')
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.anything())
+  })
+})
+
+// ── initBuildingsMechanic — walls destroyed on conquest ───────────────────────
+
+describe('initBuildingsMechanic — walls destroyed on province conquest', () => {
+  it('removes walls from state when the province is conquered', () => {
+    const wall  = makeBuilding('wall-1', conqueredId, 'walls')
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [wall])
+    initBuildingsMechanic(bus, store)
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    expect(store.getState().buildings.buildings['wall-1' as BuildingId]).toBeUndefined()
+  })
+
+  it('emits buildings:building-destroyed for each destroyed wall', () => {
+    const wall  = makeBuilding('wall-1', conqueredId, 'walls')
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [wall])
+    initBuildingsMechanic(bus, store)
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    expect(bus.emit).toHaveBeenCalledWith('buildings:building-destroyed', expect.objectContaining({
+      buildingId:   'wall-1' as BuildingId,
+      provinceId:   conqueredId,
+      buildingType: 'walls',
+    }))
+  })
+
+  it('destroys all walls when multiple exist in the province', () => {
+    const wall1 = makeBuilding('wall-1', conqueredId, 'walls')
+    const wall2 = makeBuilding('wall-2', conqueredId, 'walls')
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [wall1, wall2])
+    initBuildingsMechanic(bus, store)
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    const remaining = Object.values(store.getState().buildings.buildings)
+    expect(remaining).toHaveLength(0)
+    const destroyedCalls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
+      .filter((c: unknown[]) => c[0] === 'buildings:building-destroyed')
+    expect(destroyedCalls).toHaveLength(2)
+  })
+
+  it('does not destroy non-walls buildings when province is conquered', () => {
+    const barracks = makeBuilding('barracks-1', conqueredId, 'barracks')
+    const farm     = makeBuilding('farm-1', conqueredId, 'farm')
+    const bus      = makeMockEventBus()
+    const store    = makeStateStore(makeProvince(locationId), [barracks, farm])
+    initBuildingsMechanic(bus, store)
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    const remaining = Object.values(store.getState().buildings.buildings)
+    expect(remaining).toHaveLength(2)
+    expect(bus.emit).not.toHaveBeenCalledWith('buildings:building-destroyed', expect.anything())
+  })
+
+  it('does not destroy walls in other provinces', () => {
+    const wallHere  = makeBuilding('wall-here', conqueredId, 'walls')
+    const wallOther = makeBuilding('wall-other', locationId, 'walls')
+    const bus       = makeMockEventBus()
+    const store     = makeStateStore(makeProvince(locationId), [wallHere, wallOther])
+    initBuildingsMechanic(bus, store)
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    expect(store.getState().buildings.buildings['wall-other' as BuildingId]).toBeDefined()
+  })
+
+  it('does nothing when the conquered province has no buildings', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore()
+    initBuildingsMechanic(bus, store)
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    expect(store.setState).not.toHaveBeenCalled()
+    expect(bus.emit).not.toHaveBeenCalledWith('buildings:building-destroyed', expect.anything())
+  })
+
+  it('stops responding to map:province-conquered after destroy', () => {
+    const wall  = makeBuilding('wall-1', conqueredId, 'walls')
+    const bus   = makeMockEventBus()
+    const store = makeStateStore(makeProvince(locationId), [wall])
+    const { destroy } = initBuildingsMechanic(bus, store)
+    destroy()
+    bus.emit('map:province-conquered', {
+      provinceId: conqueredId, newOwnerId: ownerId, oldOwnerId: otherOwner,
+    })
+    expect(store.setState).not.toHaveBeenCalled()
   })
 })

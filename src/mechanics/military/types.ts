@@ -14,6 +14,7 @@ function assertPositiveFiniteNumber(value: unknown, path: string): asserts value
 export interface ArmyConfig {
   readonly durationFrames: number
   readonly strength: number
+  readonly barracksStrengthBonus: number
 }
 
 export interface MilitaryConfig {
@@ -21,7 +22,7 @@ export interface MilitaryConfig {
 }
 
 export const DEFAULT_MILITARY_CONFIG: MilitaryConfig = {
-  army: { durationFrames: 60, strength: 100 },
+  army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25 },
 }
 
 export function validateMilitaryConfig(raw: unknown): MilitaryConfig {
@@ -32,12 +33,14 @@ export function validateMilitaryConfig(raw: unknown): MilitaryConfig {
   if (!isRecord(army)) {
     throw new Error('military.army must be an object')
   }
-  assertPositiveFiniteNumber(army['durationFrames'], 'military.army.durationFrames')
-  assertPositiveFiniteNumber(army['strength'],       'military.army.strength')
+  assertPositiveFiniteNumber(army['durationFrames'],        'military.army.durationFrames')
+  assertPositiveFiniteNumber(army['strength'],              'military.army.strength')
+  assertPositiveFiniteNumber(army['barracksStrengthBonus'], 'military.army.barracksStrengthBonus')
   return {
     army: {
-      durationFrames: army['durationFrames'] as number,
-      strength:       army['strength'] as number,
+      durationFrames:        army['durationFrames'] as number,
+      strength:              army['strength'] as number,
+      barracksStrengthBonus: army['barracksStrengthBonus'] as number,
     },
   }
 }

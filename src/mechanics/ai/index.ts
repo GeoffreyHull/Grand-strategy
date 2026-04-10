@@ -37,7 +37,7 @@ export function buildAIState(playerCountryId?: CountryId): AIState {
       countryId: id as CountryId,
       isPlayerControlled: id === playerCountryId,
       personality,
-      lastDecision: null,
+      lastDecisions: [],
       lastDecisionFrame: 0,
     }
   }

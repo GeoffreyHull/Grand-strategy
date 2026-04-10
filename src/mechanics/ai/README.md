@@ -4,12 +4,13 @@
 
 Provides a utility-based decision-making framework for all AI-controlled nations.
 Each nation has a personality archetype that biases its strategy. Every 60 game
-frames (~3 seconds at 20 Hz) each AI nation scores four action types (EXPAND,
-FORTIFY, ALLY, ISOLATE), weights the scores by personality, adds a small random
-noise, and emits the highest-scoring action as an `ai:decision-made` event.
+frames (~3 seconds at 20 Hz) each AI nation scores five action types (EXPAND,
+FORTIFY, ALLY, ISOLATE, RESEARCH), weights the scores by personality, adds a small
+random noise, and emits the highest-scoring action as an `ai:decision-made` event.
 
-Future mechanics (diplomacy, military, economy) subscribe to these events to
-execute the actual game consequences of each decision.
+The mechanic reads `DiplomacyState` and `TechnologyState` each tick to make
+context-aware decisions: war targets avoid allied/truce nations, ally targets skip
+nations already allied or at war, and research urgency falls as techs are learned.
 
 ## Public API
 
@@ -82,27 +83,53 @@ interface AICountryState {
 ## Design Notes
 
 ### Utility scoring
-Each action type has a pure scoring function that reads `MapState` and `AIState`:
 
-- **EXPAND** — `1 - ownProvinceCount/maxProvinceCount + 0.15 bonus if foreign neighbours exist`. Penalises large nations; rewards smaller ones.
-- **FORTIFY** — ratio of coastal/hilly/mountainous provinces to total. Nations with exposed borders prioritise defence.
-- **ALLY** — base 0.3, +0.1 if any conqueror/zealot nation exists, -0.1 if last decision was ALLY (prevents ALLY loops).
-- **ISOLATE** — `0.2 + caution × 0.3`. Pure personality signal.
+Each action type has a pure scoring function. The final score is
+`utility × personalityWeight + random(0, 0.1)`.
 
-The final score for each action is `utility × personalityWeight + random(0, 0.1)`.
-`personalityWeight` is: EXPAND↔`aggression`, FORTIFY↔`caution`, ALLY↔`diplomacy`, ISOLATE↔`caution`.
+| Action | Utility function | Personality weight | Notes |
+|--------|-----------------|-------------------|-------|
+| EXPAND | `1 − own/max + 0.15 bonus if foreign nations exist` | `aggression` | Penalises large nations |
+| FORTIFY | ratio of coastal/hilly/mountain provinces | `caution` | Exposed borders raise score |
+| ALLY | base 0.3 + 0.1 if aggressive threat, −0.1 if repeated; 0 if no legal targets | `diplomacy` | Checks DiplomacyState for valid candidates |
+| ISOLATE | `0.2 + caution × 0.3` | `caution` | Pure personality signal |
+| RESEARCH | `remainingTechs / 8` | `economy` | Falls to 0 when all 8 techs are known |
+
+### Target selection
+
+- **EXPAND**: calls `findWarTarget` which picks the country with the fewest provinces
+  among all nations that are not allied, at war, or in truce with the attacker.
+  Returns `null` when no legal target exists; `main.ts` silently skips the
+  `declareWar` call in that case.
+- **ALLY**: calls `findAllyTarget` which scores candidates by diplomacy trait,
+  favouring diplomat/merchant archetypes, and skips nations already allied or at
+  war with the decision-maker.
+- **FORTIFY / ISOLATE / RESEARCH**: `targetCountryId` is always `null`.
+
+### AIContext
+
+`AIController.update` and `evaluateDecision` receive an `AIContext` bag instead of
+individual state parameters. Adding a new scoring signal from a future mechanic only
+requires extending `AIContext` (internal `types.ts`) and the `update` call in
+`index.ts`. No changes to the controller's method signatures are needed.
+
+```ts
+interface AIContext {
+  mapState:        MapState
+  aiState:         AIState
+  diplomacyState:  DiplomacyState
+  technologyState: TechnologyState
+}
+```
 
 ### Decision interval
+
 Decisions are gated by `decisionIntervalFrames` (default 60 frames). This
-prevents the AI from thrashing and gives future mechanics time to act on a
+prevents the AI from thrashing and gives downstream mechanics time to act on a
 decision before it changes.
 
 ### No cross-mechanic imports
-The AI mechanic never imports from `src/mechanics/map/` or any other mechanic.
-It reads map data through the `StateStore` (via `GameState.map`) and communicates
-decisions through `ai:decision-made` events that future mechanics consume.
 
-### Forward compatibility
-The `AIDecision` type includes a `targetCountryId` field (for ALLY decisions and
-future war targets) and a `priority` score that downstream mechanics can use to
-rank competing AI demands.
+The AI mechanic never imports from `src/mechanics/map/` or any other mechanic.
+State is read through `StateStore.getState()` (via `GameState`) and decisions
+are communicated via `ai:decision-made` events.

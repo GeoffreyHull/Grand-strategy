@@ -21,12 +21,12 @@ export interface AIPersonality {
   readonly caution: number
 }
 
-export type AIActionType = 'EXPAND' | 'FORTIFY' | 'ALLY' | 'ISOLATE'
+export type AIActionType = 'EXPAND' | 'FORTIFY' | 'ALLY' | 'ISOLATE' | 'RESEARCH'
 
 export interface AIDecision {
   readonly countryId: CountryId
   readonly action: AIActionType
-  /** Optional target country for ALLY actions; null when not applicable */
+  /** Target country for EXPAND (war) and ALLY actions; null otherwise */
   readonly targetCountryId: CountryId | null
   /** Utility score that selected this action (0–1) */
   readonly priority: number

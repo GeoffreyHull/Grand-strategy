@@ -11,8 +11,13 @@ import type {
   AIActionType,
   AIPersonality,
 } from '@contracts/mechanics/ai'
+import type { DiplomacyState } from '@contracts/mechanics/diplomacy'
+import type { TechnologyState } from '@contracts/mechanics/technology'
 import type { CountryId } from '@contracts/mechanics/map'
-import type { ScoredAction } from './types'
+import type { ScoredAction, AIContext } from './types'
+
+// Total number of distinct technology types — drives RESEARCH urgency.
+const TOTAL_TECH_COUNT = 8
 
 // ── Utility scoring ───────────────────────────────────────────────────────────
 
@@ -25,10 +30,8 @@ function scoreExpand(countryId: CountryId, mapState: MapState): number {
   const maxCount = Math.max(...allCounts, 1)
   const ownCount = mapState.countries[countryId]?.provinceIds.length ?? 0
 
-  // Smaller relative size → stronger desire to expand
   let score = 1 - ownCount / maxCount
 
-  // Bonus when foreign provinces exist (there are always expansion targets)
   const hasForeignNeighbours = Object.values(mapState.countries).some(
     c => c.id !== countryId && c.provinceIds.length > 0,
   )
@@ -39,8 +42,7 @@ function scoreExpand(countryId: CountryId, mapState: MapState): number {
 
 /**
  * Score the FORTIFY action (0–1).
- * Nations with many coastal, hilly, or mountainous provinces score higher —
- * these borders need defending.
+ * Nations with many coastal, hilly, or mountainous provinces score higher.
  */
 function scoreFortify(countryId: CountryId, mapState: MapState): number {
   const country = mapState.countries[countryId]
@@ -65,15 +67,25 @@ function scoreFortify(countryId: CountryId, mapState: MapState): number {
 
 /**
  * Score the ALLY action (0–1).
- * Diplomatically inclined nations or those near aggressive powers score higher.
+ * Returns 0 when no valid alliance candidates exist.
+ * Boosts when aggressive nations are present; penalises repeating ALLY.
  */
 function scoreAlly(
   countryId: CountryId,
   aiState: AIState,
+  diplomacyState: DiplomacyState,
 ): number {
+  // No point scoring ALLY if there are no legal alliance targets
+  const hasValidCandidate = Object.keys(aiState.countries).some(id => {
+    if (id === countryId) return false
+    const key = [countryId, id].sort().join(':')
+    const status = diplomacyState.relations[key]?.status ?? 'neutral'
+    return status !== 'allied' && status !== 'war'
+  })
+  if (!hasValidCandidate) return 0
+
   let score = 0.3
 
-  // Bonus when a conqueror or zealot nation exists in the world (threat perception)
   const threateningArchetypes = new Set(['conqueror', 'zealot'])
   for (const [id, state] of Object.entries(aiState.countries)) {
     if (id === countryId) continue
@@ -83,10 +95,7 @@ function scoreAlly(
     }
   }
 
-  // Penalty for repeating an ALLY decision immediately
-  if (aiState.countries[countryId]?.lastDecision?.action === 'ALLY') {
-    score -= 0.1
-  }
+  if (aiState.countries[countryId]?.lastDecision?.action === 'ALLY') score -= 0.1
 
   return Math.min(1, Math.max(0, score))
 }
@@ -97,6 +106,18 @@ function scoreAlly(
  */
 function scoreIsolate(personality: AIPersonality): number {
   return Math.min(1, Math.max(0, 0.2 + personality.caution * 0.3))
+}
+
+/**
+ * Score the RESEARCH action (0–1).
+ * Rises with the fraction of undiscovered technologies.
+ * Weighted by personality.economy in the candidates list.
+ */
+function scoreResearch(countryId: CountryId, technologyState: TechnologyState): number {
+  const known = technologyState.byCountry[countryId]?.length ?? 0
+  const remaining = TOTAL_TECH_COUNT - known
+  if (remaining === 0) return 0
+  return remaining / TOTAL_TECH_COUNT
 }
 
 // ── AIController ──────────────────────────────────────────────────────────────
@@ -111,10 +132,10 @@ export class AIController {
    */
   update(
     frame: number,
-    mapState: MapState,
-    aiState: AIState,
+    context: AIContext,
   ): readonly AICountryState[] {
     const updated: AICountryState[] = []
+    const { aiState } = context
 
     for (const [, countryState] of Object.entries(aiState.countries)) {
       if (countryState.isPlayerControlled) continue
@@ -122,7 +143,7 @@ export class AIController {
       const framesSinceLast = frame - countryState.lastDecisionFrame
       if (framesSinceLast < aiState.decisionIntervalFrames) continue
 
-      const decision = this.evaluateDecision(countryState, mapState, aiState, frame)
+      const decision = this.evaluateDecision(countryState, context, frame)
 
       updated.push({
         ...countryState,
@@ -138,15 +159,15 @@ export class AIController {
 
   /**
    * Utility-based decision for a single country.
-   * Scores all four action types, weights by personality, adds noise, picks max.
+   * Scores all five action types, weights by personality, adds noise, picks max.
    */
   evaluateDecision(
     countryState: AICountryState,
-    mapState: MapState,
-    aiState: AIState,
+    context: AIContext,
     frame: number,
   ): AIDecision {
     const { countryId, personality } = countryState
+    const { mapState, aiState, diplomacyState, technologyState } = context
 
     const candidates: ScoredAction[] = [
       {
@@ -159,18 +180,26 @@ export class AIController {
       },
       {
         action: 'ALLY',
-        score: scoreAlly(countryId, aiState) * personality.diplomacy + Math.random() * 0.1,
+        score: scoreAlly(countryId, aiState, diplomacyState) * personality.diplomacy + Math.random() * 0.1,
       },
       {
         action: 'ISOLATE',
         score: scoreIsolate(personality) * personality.caution + Math.random() * 0.1,
       },
+      {
+        action: 'RESEARCH',
+        score: scoreResearch(countryId, technologyState) * personality.economy + Math.random() * 0.1,
+      },
     ]
 
     const best = candidates.reduce((a, b) => (b.score > a.score ? b : a))
 
-    const targetCountryId: CountryId | null =
-      best.action === 'ALLY' ? this.findAllyTarget(countryId, aiState) : null
+    let targetCountryId: CountryId | null = null
+    if (best.action === 'ALLY') {
+      targetCountryId = this.findAllyTarget(countryId, aiState, diplomacyState)
+    } else if (best.action === 'EXPAND') {
+      targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState)
+    }
 
     return {
       countryId,
@@ -185,6 +214,7 @@ export class AIController {
   private findAllyTarget(
     countryId: CountryId,
     aiState: AIState,
+    diplomacyState: DiplomacyState,
   ): CountryId | null {
     const friendlyArchetypes = new Set(['diplomat', 'merchant'])
     let best: CountryId | null = null
@@ -193,12 +223,48 @@ export class AIController {
     for (const [id, state] of Object.entries(aiState.countries)) {
       if (id === countryId) continue
       if (state.isPlayerControlled) continue
+      // Skip already allied or at-war countries
+      const key = [countryId, id].sort().join(':')
+      const status = diplomacyState.relations[key]?.status ?? 'neutral'
+      if (status === 'allied' || status === 'war') continue
+
       const score = friendlyArchetypes.has(state.personality.archetype)
         ? state.personality.diplomacy
         : state.personality.diplomacy * 0.5
       if (score > bestScore) {
         bestScore = score
         best = state.countryId
+      }
+    }
+
+    return best
+  }
+
+  /**
+   * Find the best war target for an EXPAND decision.
+   * Prefers weaker countries (fewer provinces) that can be legally attacked:
+   * not allied, not already at war, not in an active truce.
+   * Returns null when no valid target exists.
+   */
+  private findWarTarget(
+    countryId: CountryId,
+    mapState: MapState,
+    diplomacyState: DiplomacyState,
+  ): CountryId | null {
+    let best: CountryId | null = null
+    let bestProvinceCount = Infinity
+
+    for (const [id, country] of Object.entries(mapState.countries)) {
+      if (id === countryId) continue
+      if (country.provinceIds.length === 0) continue
+
+      const key = [countryId, id].sort().join(':')
+      const status = diplomacyState.relations[key]?.status ?? 'neutral'
+      if (status === 'allied' || status === 'war' || status === 'truce') continue
+
+      if (country.provinceIds.length < bestProvinceCount) {
+        bestProvinceCount = country.provinceIds.length
+        best = id as CountryId
       }
     }
 

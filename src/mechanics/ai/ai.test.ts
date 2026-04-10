@@ -2,8 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import type { EventBus } from '../../engine/EventBus'
 import type { EventMap } from '@contracts/events'
 import type { MapState } from '@contracts/state'
+import type { DiplomacyState } from '@contracts/mechanics/diplomacy'
+import type { TechnologyState } from '@contracts/mechanics/technology'
 import type { AIState, AICountryState, AIPersonality } from '@contracts/mechanics/ai'
 import type { CountryId, ProvinceId } from '@contracts/mechanics/map'
+import type { AIContext } from './types'
 import { buildAIState } from './index'
 import { DEFAULT_PERSONALITIES } from './personalities'
 import { AIController } from './AIController'
@@ -78,6 +81,30 @@ function makeAIState(
   }
 
   return { ...base, countries, decisionIntervalFrames }
+}
+
+/** Build a minimal AIContext for testing. All diplomacy/tech state is empty by default. */
+function makeContext(
+  mapState: MapState,
+  aiState: AIState,
+  diplomacyOverride: Partial<DiplomacyState> = {},
+  technologyOverride: Partial<TechnologyState> = {},
+): AIContext {
+  return {
+    mapState,
+    aiState,
+    diplomacyState: {
+      relations: {},
+      currentTurn: 0,
+      framesPerTurn: 100,
+      ...diplomacyOverride,
+    },
+    technologyState: {
+      technologies: {} as TechnologyState['technologies'],
+      byCountry: {} as TechnologyState['byCountry'],
+      ...technologyOverride,
+    },
+  }
 }
 
 // ── buildAIState ──────────────────────────────────────────────────────────────
@@ -171,51 +198,146 @@ describe('AIController.evaluateDecision', () => {
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ valdorn: 5, kharrath: 8 })
     const aiState = makeAIState()
+    const context = makeContext(mapState, aiState)
     const countryState = aiState.countries['valdorn']!
 
-    const decision = ctrl.evaluateDecision(countryState, mapState, aiState, 100)
+    const decision = ctrl.evaluateDecision(countryState, context, 100)
 
     expect(decision.countryId).toBe('valdorn')
-    expect(['EXPAND', 'FORTIFY', 'ALLY', 'ISOLATE']).toContain(decision.action)
+    expect(['EXPAND', 'FORTIFY', 'ALLY', 'ISOLATE', 'RESEARCH']).toContain(decision.action)
     expect(decision.priority).toBeGreaterThanOrEqual(0)
     expect(decision.priority).toBeLessThanOrEqual(1)
     expect(decision.frame).toBe(100)
   })
 
   it('ALLY decision includes a targetCountryId', () => {
-    // Force an ALLY decision by giving the country max diplomacy
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ solenne: 3, valdorn: 3 })
     const aiState = makeAIState()
+    // Suppress RESEARCH competition by marking all techs known for solenne
+    const allTechs = ['agriculture', 'iron-working', 'steel-working', 'trade-routes', 'writing', 'siege-engineering', 'cartography', 'bureaucracy'] as const
+    const context = makeContext(mapState, aiState, {}, {
+      byCountry: { [cid('solenne')]: allTechs } as unknown as TechnologyState['byCountry'],
+    })
 
-    // Run multiple times to account for random noise
     let allyFound = false
-    for (let i = 0; i < 50; i++) {
-      const decision = ctrl.evaluateDecision(aiState.countries['solenne']!, mapState, aiState, i)
+    for (let i = 0; i < 100; i++) {
+      const decision = ctrl.evaluateDecision(aiState.countries['solenne']!, context, i)
       if (decision.action === 'ALLY') {
         expect(decision.targetCountryId).not.toBeNull()
         allyFound = true
         break
       }
     }
-    // Solenne is a diplomat — ALLY should come up at least occasionally
     expect(allyFound).toBe(true)
   })
 
-  it('non-ALLY decision has null targetCountryId', () => {
+  it('EXPAND decision includes a targetCountryId when a valid war target exists', () => {
+    const bus = mockEventBus()
+    const ctrl = new AIController(bus)
+    // kharrath (conqueror, high aggression) with a small province count to maximise EXPAND score
+    const mapState = makeMapState({ kharrath: 1, valdorn: 5 })
+    const aiState = makeAIState()
+    const context = makeContext(mapState, aiState)
+
+    let expandFound = false
+    for (let i = 0; i < 100; i++) {
+      const decision = ctrl.evaluateDecision(aiState.countries['kharrath']!, context, i)
+      if (decision.action === 'EXPAND') {
+        expect(decision.targetCountryId).not.toBeNull()
+        expandFound = true
+        break
+      }
+    }
+    expect(expandFound).toBe(true)
+  })
+
+  it('EXPAND prefers the weakest (fewest provinces) war target', () => {
+    const bus = mockEventBus()
+    const ctrl = new AIController(bus)
+    // attacker has 2 provinces; weak has 1, strong has 10
+    const mapState = makeMapState({ kharrath: 2, valdorn: 1, solenne: 10 })
+    const aiState = makeAIState()
+    const context = makeContext(mapState, aiState)
+
+    let expandCount = 0
+    let alwaysWeakest = true
+    for (let i = 0; i < 50; i++) {
+      const decision = ctrl.evaluateDecision(aiState.countries['kharrath']!, context, i)
+      if (decision.action === 'EXPAND') {
+        expandCount++
+        if (decision.targetCountryId !== 'valdorn') alwaysWeakest = false
+      }
+    }
+
+    if (expandCount > 0) {
+      expect(alwaysWeakest).toBe(true)
+    }
+  })
+
+  it('EXPAND returns null targetCountryId when all others are allied or at war', () => {
+    const bus = mockEventBus()
+    const ctrl = new AIController(bus)
+    const mapState = makeMapState({ kharrath: 2, valdorn: 5 })
+    const aiState = makeAIState()
+    // Mark kharrath–valdorn as allied
+    const diplomacy: Partial<DiplomacyState> = {
+      relations: {
+        'kharrath:valdorn': {
+          countryA: cid('kharrath'),
+          countryB: cid('valdorn'),
+          status: 'allied',
+          truceExpiresAtTurn: null,
+        },
+      },
+    }
+    const context = makeContext(mapState, aiState, diplomacy)
+
+    for (let i = 0; i < 20; i++) {
+      const decision = ctrl.evaluateDecision(aiState.countries['kharrath']!, context, i)
+      if (decision.action === 'EXPAND') {
+        expect(decision.targetCountryId).toBeNull()
+      }
+    }
+  })
+
+  it('FORTIFY, ISOLATE, and RESEARCH decisions have null targetCountryId', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ dravenn: 5 })
     const aiState = makeAIState()
+    const context = makeContext(mapState, aiState)
 
-    // Run many times and check that non-ALLY decisions have null target
     for (let i = 0; i < 20; i++) {
-      const decision = ctrl.evaluateDecision(aiState.countries['dravenn']!, mapState, aiState, i)
-      if (decision.action !== 'ALLY') {
+      const decision = ctrl.evaluateDecision(aiState.countries['dravenn']!, context, i)
+      if (decision.action === 'FORTIFY' || decision.action === 'ISOLATE' || decision.action === 'RESEARCH') {
         expect(decision.targetCountryId).toBeNull()
       }
     }
+  })
+
+  it('RESEARCH returns null targetCountryId and scores 0 when all techs are known', () => {
+    const bus = mockEventBus()
+    const ctrl = new AIController(bus)
+    const mapState = makeMapState({ auren: 5, kharrath: 3 })
+    const aiState = makeAIState()
+    const allKnown = [
+      'agriculture', 'iron-working', 'steel-working', 'trade-routes',
+      'writing', 'siege-engineering', 'cartography', 'bureaucracy',
+    ] as const
+    const techOverride: Partial<TechnologyState> = {
+      byCountry: { [cid('auren')]: allKnown } as unknown as TechnologyState['byCountry'],
+    }
+    const context = makeContext(mapState, aiState, {}, techOverride)
+
+    let researchCount = 0
+    for (let i = 0; i < 100; i++) {
+      const decision = ctrl.evaluateDecision(aiState.countries['auren']!, context, i)
+      if (decision.action === 'RESEARCH') researchCount++
+    }
+    // With 0 remaining techs, RESEARCH score is 0 and should essentially never win
+    expect(researchCount).toBe(0)
   })
 })
 
@@ -226,10 +348,10 @@ describe('AIController.update — decision interval', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ valdorn: 5 })
-    // lastDecisionFrame = 0, interval = 60; call at frame 30
     const aiState = makeAIState({ valdorn: { lastDecisionFrame: 0 } }, 60)
+    const context = makeContext(mapState, aiState)
 
-    const changed = ctrl.update(30, mapState, aiState)
+    const changed = ctrl.update(30, context)
 
     expect(changed.length).toBe(0)
     expect(bus.emit).not.toHaveBeenCalled()
@@ -239,12 +361,11 @@ describe('AIController.update — decision interval', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ valdorn: 5, kharrath: 7 })
-    // lastDecisionFrame = 0, interval = 60; call at frame 60
     const aiState = makeAIState({}, 60)
+    const context = makeContext(mapState, aiState)
 
-    const changed = ctrl.update(60, mapState, aiState)
+    const changed = ctrl.update(60, context)
 
-    // All 20 AI nations should decide on frame 60 (all started at frame 0)
     expect(changed.length).toBe(20)
     expect(bus.emit).toHaveBeenCalledTimes(20)
   })
@@ -254,8 +375,9 @@ describe('AIController.update — decision interval', () => {
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ valdorn: 5 })
     const aiState = makeAIState({ valdorn: { isPlayerControlled: true } }, 1)
+    const context = makeContext(mapState, aiState)
 
-    const changed = ctrl.update(100, mapState, aiState)
+    const changed = ctrl.update(100, context)
 
     const valdornChanged = changed.some(c => c.countryId === 'valdorn')
     expect(valdornChanged).toBe(false)
@@ -266,8 +388,9 @@ describe('AIController.update — decision interval', () => {
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ kharrath: 8 })
     const aiState = makeAIState({}, 60)
+    const context = makeContext(mapState, aiState)
 
-    const changed = ctrl.update(60, mapState, aiState)
+    const changed = ctrl.update(60, context)
 
     const kharrathState = changed.find(c => c.countryId === 'kharrath')
     expect(kharrathState?.lastDecisionFrame).toBe(60)
@@ -277,12 +400,15 @@ describe('AIController.update — decision interval', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ valdorn: 5, solenne: 6, kharrath: 7 })
-    const aiState = makeAIState({}, 1) // interval=1 so every frame triggers
+    const aiState = makeAIState({}, 1)
+    const context = makeContext(mapState, aiState)
 
-    ctrl.update(5, mapState, aiState)
+    ctrl.update(5, context)
 
     expect(bus.emit).toHaveBeenCalledWith('ai:decision-made', expect.objectContaining({
-      decision: expect.objectContaining({ action: expect.stringMatching(/^(EXPAND|FORTIFY|ALLY|ISOLATE)$/) }),
+      decision: expect.objectContaining({
+        action: expect.stringMatching(/^(EXPAND|FORTIFY|ALLY|ISOLATE|RESEARCH)$/),
+      }),
     }))
   })
 })
@@ -293,14 +419,14 @@ describe('personality weighting', () => {
   it('conqueror prefers EXPAND over ISOLATE on average', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
-    // Give kharrath (conqueror) 3 provinces; max is 10 → expansion score high
     const mapState = makeMapState({ kharrath: 3, solenne: 10 })
     const aiState = makeAIState()
+    const context = makeContext(mapState, aiState)
 
     let expandCount = 0
     let isolateCount = 0
     for (let i = 0; i < 100; i++) {
-      const d = ctrl.evaluateDecision(aiState.countries['kharrath']!, mapState, aiState, i)
+      const d = ctrl.evaluateDecision(aiState.countries['kharrath']!, context, i)
       if (d.action === 'EXPAND') expandCount++
       if (d.action === 'ISOLATE') isolateCount++
     }
@@ -313,11 +439,16 @@ describe('personality weighting', () => {
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ dravenn: 5, kharrath: 7 })
     const aiState = makeAIState()
+    // Suppress RESEARCH so the defensive personality bias is visible
+    const allTechs = ['agriculture', 'iron-working', 'steel-working', 'trade-routes', 'writing', 'siege-engineering', 'cartography', 'bureaucracy'] as const
+    const context = makeContext(mapState, aiState, {}, {
+      byCountry: { [cid('dravenn')]: allTechs } as unknown as TechnologyState['byCountry'],
+    })
 
     let expandCount = 0
     let defensiveCount = 0
     for (let i = 0; i < 100; i++) {
-      const d = ctrl.evaluateDecision(aiState.countries['dravenn']!, mapState, aiState, i)
+      const d = ctrl.evaluateDecision(aiState.countries['dravenn']!, context, i)
       if (d.action === 'EXPAND') expandCount++
       if (d.action === 'ISOLATE' || d.action === 'FORTIFY') defensiveCount++
     }
@@ -330,16 +461,40 @@ describe('personality weighting', () => {
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ solenne: 7, kharrath: 4 })
     const aiState = makeAIState()
+    // Suppress RESEARCH so the alliance-seeking personality bias is visible
+    const allTechs = ['agriculture', 'iron-working', 'steel-working', 'trade-routes', 'writing', 'siege-engineering', 'cartography', 'bureaucracy'] as const
+    const context = makeContext(mapState, aiState, {}, {
+      byCountry: { [cid('solenne')]: allTechs } as unknown as TechnologyState['byCountry'],
+    })
 
     let allyCount = 0
     let expandCount = 0
     for (let i = 0; i < 100; i++) {
-      const d = ctrl.evaluateDecision(aiState.countries['solenne']!, mapState, aiState, i)
+      const d = ctrl.evaluateDecision(aiState.countries['solenne']!, context, i)
       if (d.action === 'ALLY') allyCount++
       if (d.action === 'EXPAND') expandCount++
     }
 
     expect(allyCount).toBeGreaterThan(expandCount)
+  })
+
+  it('merchant prioritises RESEARCH over EXPAND on average', () => {
+    const bus = mockEventBus()
+    const ctrl = new AIController(bus)
+    // Give auren (merchant) a medium province count so EXPAND isn't zero
+    const mapState = makeMapState({ auren: 5, kharrath: 8 })
+    const aiState = makeAIState()
+    const context = makeContext(mapState, aiState)
+
+    let researchCount = 0
+    let expandCount = 0
+    for (let i = 0; i < 100; i++) {
+      const d = ctrl.evaluateDecision(aiState.countries['auren']!, context, i)
+      if (d.action === 'RESEARCH') researchCount++
+      if (d.action === 'EXPAND') expandCount++
+    }
+
+    expect(researchCount).toBeGreaterThan(expandCount)
   })
 })
 

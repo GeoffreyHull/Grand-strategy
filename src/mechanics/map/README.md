@@ -11,7 +11,8 @@ Exported from `src/mechanics/map/index.ts`:
 | Export | Type | Description |
 |---|---|---|
 | `buildMapState()` | `() => MapState` | Builds the initial map state from world data. Call once at startup. |
-| `initMapMechanic(canvas, eventBus, stateStore)` | Function | Wires up the renderer, interaction, and event subscriptions. Returns `{ render, destroy }`. |
+| `initMapMechanic(canvas, eventBus, stateStore)` | Function | Wires up the renderer, interaction, leaderboard, and event subscriptions. Returns `{ render, destroy }`. |
+| `appendCombatLog(text, type, turn)` | Function | Append an entry to the combat log HTML panel. |
 | `Province` | type | Re-exported from contracts |
 | `Country` | type | Re-exported from contracts |
 | `Territory` | type | Re-exported from contracts — represents a single hex cell |
@@ -37,9 +38,12 @@ Exported from `src/mechanics/map/index.ts`:
 | `map:province-hovered` | `{ provinceId \| null }` | Updates `hoveredProvinceId` in state; refreshes info panel |
 | `map:province-selected` | `{ provinceId, countryId }` | Updates `selectedProvinceId` in state; refreshes info panel |
 | `ai:decision-made` | `{ decision }` | On `EXPAND`: captures `decision.frame` for combat log turn labelling, then runs combat resolution against a random neighbouring province. Attacker uses armies in adjacent provinces + base 50; defender uses armies in target province × terrain multiplier (plains 1.0, hills 1.3, mountains 1.6, forest 1.2, tundra 1.1, desert 0.9) + walls bonus 60 + base 20. Attacker win → `map:province-conquered`; defender win → `map:province-attack-repelled` |
-| `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel to show updated army counts |
+| `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel and leaderboard to show updated army counts |
+| `military:army-destroyed` | `{ armyId, ... }` | Refreshes leaderboard to reflect reduced military strength |
 | `buildings:building-constructed` | `{ buildingId, ... }` | Refreshes info panel to show updated building list |
-| `map:province-conquered` | `{ provinceId, ... }` | Refreshes info panel to reflect new ownership |
+| `map:province-conquered` | `{ provinceId, ... }` | Refreshes info panel and leaderboard to reflect new ownership |
+| `economy:income-collected` | `{ ... }` | Refreshes info panel and leaderboard to reflect updated gold totals |
+| `economy:gold-deducted` | `{ ... }` | Refreshes info panel and leaderboard to reflect updated gold totals |
 | `diplomacy:war-declared` | `{ declarerId, targetId }` | Adds the country pair to the local `activeWars` set so province capture is permitted |
 | `diplomacy:peace-made` | `{ countryA, countryB }` | Removes the country pair from `activeWars`, blocking further province capture |
 
@@ -128,5 +132,6 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 - **Info panel and legend** are updated via DOM manipulation in `index.ts`; canvas rendering is pure draw-only via `MapRenderer`.
 - **Combat log turn numbers:** Each log entry displays a `Turn N` label derived from `Math.floor(frame / 60) + 1`, where 60 is the AI decision interval. This groups all attacks from the same decision cycle under the same turn number. The `.log-turn` CSS class (defined in `index.html`) styles the label as a small grey annotation above the entry text.
 - **Attack arrows:** After each combat resolution, a transient `AttackArrow` (defined in `types.ts`) is pushed to a local array in `initMapMechanic`. The arrow records the attacker's adjacent province IDs, the target province ID, the result (`'conquered'` or `'repelled'`), and a `createdAt` timestamp. `MapRenderer.render()` receives the arrow list and draws color-coded arrows in world space: green (`#22ee77`) for a successful capture, red (`#ff4444`) for a repelled attack. Arrows fade out smoothly over the last 1.2 s of their 4 s display window. Expired arrows are pruned before each render call (FIFO order). No arrow state leaks into `GameState`.
+- **Leaderboard panel:** `LeaderboardRenderer.ts` computes a score per country (`provinces × 1000 + militaryStrength + gold / 10`) and re-renders the `#leaderboard-list` DOM element whenever province counts, army strength, or gold changes. Countries with zero provinces are flagged as eliminated and sorted to the bottom. The panel is collapsible (CSS `.collapsed` toggle) via a click handler in `index.html`, matching the pattern used by the legend and combat log panels. The static column-header row lives outside `#leaderboard-list` so it is never cleared by `renderLeaderboard`.
 - **No `any` types.** Branded `ProvinceId`/`CountryId` string types catch ID mixups at compile time.
 - **War gate:** Province capture is only permitted when an active war exists between the attacker and defender. The mechanic maintains a local `activeWars: Set<string>` (keyed by sorted country ID pair) updated via `diplomacy:war-declared` / `diplomacy:peace-made` events. This avoids a direct import of the diplomacy mechanic while still enforcing the invariant. Because the map mechanic's `ai:decision-made` handler runs before `main.ts` declares war (registration order), a country must declare war in one tick and attack in a subsequent tick — matching realistic grand-strategy behavior.

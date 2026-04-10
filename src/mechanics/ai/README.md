@@ -4,9 +4,9 @@
 
 Provides a utility-based decision-making framework for all AI-controlled nations.
 Each nation has a personality archetype that biases its strategy. Every 60 game
-frames (~3 seconds at 20 Hz) each AI nation scores five action types (EXPAND,
-FORTIFY, ALLY, ISOLATE, RESEARCH), weights the scores by personality, adds a small
-random noise, and emits one or more `ai:decision-made` events.
+frames (~3 seconds at 20 Hz) each AI nation scores six action types (EXPAND,
+FORTIFY, ALLY, ISOLATE, RESEARCH, SEEK_PEACE), weights the scores by personality,
+adds small random noise, and emits one or more `ai:decision-made` events.
 
 The number of actions taken per decision is judgment-based: aggressive and
 economically active personalities can take up to 4 actions per turn (e.g. a
@@ -15,9 +15,14 @@ decision batch), while cautious/isolationist personalities typically take only o
 A minimum score threshold — raised by high caution and lowered by high aggression —
 gates whether an action fires at all.
 
-The mechanic reads `DiplomacyState` and `TechnologyState` each tick to make
+The mechanic reads `DiplomacyState`, `MapState`, and `TechnologyState` each tick to make
 context-aware decisions: war targets avoid allied/truce nations, ally targets skip
-nations already allied or at war, and research urgency falls as techs are learned.
+nations already allied or at war, research urgency falls as techs are learned, and
+SEEK_PEACE urgency rises when a country is outnumbered or fighting on multiple fronts.
+
+When a truce request arrives (`diplomacy:truce-requested`), `main.ts` calls
+`evaluateTruceResponse` synchronously so the AI responds immediately to incoming
+requests — without waiting for the next decision cycle.
 
 ## Public API
 
@@ -29,7 +34,7 @@ Constructs the initial `AIState` with all 20 nations assigned their default
 personalities. Pass a `CountryId` to mark one nation as player-controlled
 (it will not receive AI decisions). Called once during game bootstrap.
 
-### `initAIMechanic(eventBus, stateStore): { update, destroy }`
+### `initAIMechanic(eventBus, stateStore): { update, evaluateTruceResponse, destroy }`
 
 Initialises the mechanic. Register `update` with the game loop:
 
@@ -37,6 +42,11 @@ Initialises the mechanic. Register `update` with the game loop:
 const aiMechanic = initAIMechanic(eventBus, stateStore)
 gameLoop.addUpdateSystem(aiMechanic.update)
 ```
+
+`evaluateTruceResponse(requesterId, targetId, context)` — evaluates whether an
+AI-controlled `targetId` should accept a truce request from `requesterId`. Called by
+`main.ts` when `diplomacy:truce-requested` fires and the target is AI-controlled.
+Returns `true` to accept, `false` to reject.
 
 `destroy()` cleans up event subscriptions.
 
@@ -101,6 +111,7 @@ Each action type has a pure scoring function. The final score is
 | ALLY | base 0.3 + 0.1 if aggressive threat, −0.1 if repeated; 0 if no legal targets | `diplomacy` | Checks DiplomacyState for valid candidates |
 | ISOLATE | `0.2 + caution × 0.3` | `caution` | Pure personality signal |
 | RESEARCH | `remainingTechs / 8` | `economy` | Falls to 0 when all 8 techs are known |
+| SEEK_PEACE | `powerDeficit × 0.5 + personalityUrge × 0.4 + multiFrontPenalty`; 0 if not at war | none (raw score) | `powerDeficit = max(0, 1 − own/totalEnemy)`; `personalityUrge = caution × 0.4 + (1−aggression) × 0.3`; multi-front penalty caps at 0.3 |
 
 ### Multi-action decision logic
 
@@ -118,6 +129,7 @@ Each action type has a pure scoring function. The final score is
    - ALLY: max 2 (form up to 2 alliances)
    - ISOLATE: max 2 (fortify up to 2 provinces)
    - RESEARCH: max 1 (queue at most 1 tech)
+   - SEEK_PEACE: max 1 (one truce request per decision)
 6. For EXPAND and ALLY, already-chosen targets are excluded from subsequent
    repetitions of the same action so the same nation is never targeted twice.
 7. At least one action is always returned (fallback to the highest-scoring action
@@ -142,6 +154,7 @@ Each action type has a pure scoring function. The final score is
   favouring diplomat/merchant archetypes, and skips nations already allied or at
   war with the decision-maker. Accepts an `excluded` set for multi-alliance batches.
 - **FORTIFY / ISOLATE / RESEARCH**: `targetCountryId` is always `null`.
+- **SEEK_PEACE**: calls `findWarEnemy` which picks the enemy with the **most** provinces (the biggest threat). Returns `null` when not at war.
 
 ### `evaluateDecision` (single-action, public)
 
@@ -169,6 +182,23 @@ interface AIContext {
 Decisions are gated by `decisionIntervalFrames` (default 60 frames). This
 prevents the AI from thrashing and gives downstream mechanics time to act on a
 decision before it changes.
+
+### Truce response evaluation
+
+`evaluateTruceResponse(requesterId, targetId, context)` is a synchronous method
+called by `main.ts` — not part of the normal decision cycle. It computes:
+
+```
+powerRatio  = responderProvinces / Math.max(1, requesterProvinces)
+winBonus    = max(0, powerRatio − 1.0) × 0.4   // winning → lean toward reject
+acceptBase  = diplomacy × 0.5 + caution × 0.3
+aggrPenalty = aggression × 0.4
+acceptScore = acceptBase − aggrPenalty − winBonus + random(0, 0.1)
+accept      = acceptScore > 0.25
+```
+
+Diplomats and isolationists with a disadvantage almost always accept. Conquerors
+and zealots with a clear advantage almost always reject.
 
 ### No cross-mechanic imports
 

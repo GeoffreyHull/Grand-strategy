@@ -21,7 +21,7 @@ export interface AIPersonality {
   readonly caution: number
 }
 
-export type AIActionType = 'EXPAND' | 'FORTIFY' | 'ALLY' | 'ISOLATE' | 'RESEARCH'
+export type AIActionType = 'EXPAND' | 'FORTIFY' | 'ALLY' | 'ISOLATE' | 'RESEARCH' | 'SEEK_PEACE'
 
 export interface AIDecision {
   readonly countryId: CountryId

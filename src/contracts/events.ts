@@ -173,6 +173,18 @@ export interface EventMap {
     readonly oldStatus: DiplomaticStatus | 'neutral'
     readonly newStatus: DiplomaticStatus
   }
+  'diplomacy:truce-requested': {
+    readonly requesterId: CountryId
+    readonly targetId: CountryId
+  }
+  'diplomacy:truce-accepted': {
+    readonly requesterId: CountryId
+    readonly targetId: CountryId
+  }
+  'diplomacy:truce-rejected': {
+    readonly requesterId: CountryId
+    readonly targetId: CountryId
+  }
 
   // Technology mechanic events
   'technology:research-completed': {

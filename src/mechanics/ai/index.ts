@@ -12,6 +12,8 @@ import type { AIContext } from './types'
 import { DEFAULT_PERSONALITIES } from './personalities'
 import { AIController } from './AIController'
 
+export type { AIContext } from './types'
+
 // Re-export public contract types
 export type {
   AIState,
@@ -56,13 +58,14 @@ export function buildAIState(playerCountryId?: CountryId): AIState {
  * is built.
  *
  * Returns:
- *   `update`  — register with `gameLoop.addUpdateSystem(aiMechanic.update)`
- *   `destroy` — clean up subscriptions
+ *   `update`               — register with `gameLoop.addUpdateSystem(aiMechanic.update)`
+ *   `evaluateTruceResponse` — called by main.ts when a truce request targets an AI country
+ *   `destroy`              — clean up subscriptions
  */
 export function initAIMechanic(
   eventBus: EventBus<EventMap>,
   stateStore: StateStore<GameState>,
-): { update: (ctx: TickContext) => void; destroy: () => void } {
+): { update: (ctx: TickContext) => void; evaluateTruceResponse: (requesterId: CountryId, targetId: CountryId, context: AIContext) => boolean; destroy: () => void } {
   const controller = new AIController(eventBus)
 
   // Allow runtime player-country reassignment
@@ -104,8 +107,13 @@ export function initAIMechanic(
     })
   }
 
+  function evaluateTruceResponse(requesterId: CountryId, targetId: CountryId, context: AIContext): boolean {
+    return controller.evaluateTruceResponse(requesterId, targetId, context)
+  }
+
   return {
     update,
+    evaluateTruceResponse,
     destroy: () => sub.unsubscribe(),
   }
 }

@@ -5,6 +5,7 @@ import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
 import { buildMapState, initMapMechanic, appendCombatLog } from './mechanics/map/index'
 import { buildAIState, initAIMechanic } from './mechanics/ai/index'
+import type { AIContext } from './mechanics/ai/index'
 import { buildConstructionState, initConstructionMechanic } from './mechanics/construction/index'
 import {
   buildMilitaryState,
@@ -237,7 +238,30 @@ eventBus.on('ai:decision-made', ({ decision }) => {
         requestResearchTechnology(eventBus, stateStore, countryId, capitalId, techType, technologyConfig)
       }
     }
+
+  } else if (action === 'SEEK_PEACE') {
+    // Submit a truce request to the target enemy; diplomacy mechanic queues it
+    if (decision.targetCountryId !== null) {
+      diplomacyMechanic.requestTruce(countryId, decision.targetCountryId)
+    }
   }
+})
+
+// When a truce request arrives, the targeted AI country evaluates it immediately.
+// If the target is player-controlled, the request sits pending until the player
+// responds via UI (or expires after TRUCE_REQUEST_EXPIRY_TURNS turns).
+eventBus.on('diplomacy:truce-requested', ({ requesterId, targetId }) => {
+  const targetState = stateStore.getSlice('ai').countries[targetId]
+  if (targetState === undefined || targetState.isPlayerControlled) return
+
+  const context: AIContext = {
+    mapState:        stateStore.getSlice('map'),
+    aiState:         stateStore.getSlice('ai'),
+    diplomacyState:  stateStore.getSlice('diplomacy'),
+    technologyState: stateStore.getSlice('technology'),
+  }
+  const accepts = aiMechanic.evaluateTruceResponse(requesterId, targetId, context)
+  diplomacyMechanic.respondToTruceRequest(requesterId, targetId, accepts)
 })
 
 eventBus.on('military:army-raised', ({ armyId, countryId, provinceId }) => {
@@ -287,6 +311,29 @@ eventBus.on('diplomacy:peace-made', ({ countryA, countryB }) => {
 
 eventBus.on('diplomacy:truce-expired', ({ countryA, countryB }) => {
   console.debug(`[Diplomacy] Truce expired: ${countryA} ↔ ${countryB}`)
+})
+
+eventBus.on('diplomacy:truce-requested', ({ requesterId, targetId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const requester = countries[requesterId]?.name ?? requesterId
+  const target    = countries[targetId]?.name ?? targetId
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${requester} requests a truce with ${target}`, 'diplomacy-peace', turn)
+})
+
+eventBus.on('diplomacy:truce-accepted', ({ requesterId, targetId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const requester = countries[requesterId]?.name ?? requesterId
+  const target    = countries[targetId]?.name ?? targetId
+  const turn = stateStore.getSlice('diplomacy').currentTurn
+  appendCombatLog(`${target} accepts ${requester}'s truce request`, 'diplomacy-peace', turn)
+})
+
+eventBus.on('diplomacy:truce-rejected', ({ requesterId, targetId }) => {
+  const countries = stateStore.getSlice('map').countries
+  const requester = countries[requesterId]?.name ?? requesterId
+  const target    = countries[targetId]?.name ?? targetId
+  console.debug(`[Diplomacy] Truce rejected: ${requester} ← ${target}`)
 })
 
 eventBus.on('diplomacy:alliance-formed', ({ countryA, countryB }) => {

@@ -427,3 +427,178 @@ describe('getRelation', () => {
     expect(diplomacy.getRelation(A, B)).toEqual(diplomacy.getRelation(B, A))
   })
 })
+
+// ── requestTruce ──────────────────────────────────────────────────────────────
+
+describe('requestTruce', () => {
+  it('stores a pending request and emits truce-requested', () => {
+    const bus = makeBus()
+    const store = makeStore()
+    const diplomacy = initDiplomacy(bus, store)
+    diplomacy.declareWar(A, B)
+
+    const requested = vi.fn()
+    bus.on('diplomacy:truce-requested', requested)
+
+    diplomacy.requestTruce(A, B)
+
+    expect(requested).toHaveBeenCalledWith({ requesterId: A, targetId: B })
+    const requests = store.getSlice('diplomacy').pendingTruceRequests
+    expect(Object.keys(requests)).toHaveLength(1)
+  })
+
+  it('is a no-op when the two countries are not at war', () => {
+    const bus = makeBus()
+    const diplomacy = initDiplomacy(bus, makeStore())
+
+    const requested = vi.fn()
+    bus.on('diplomacy:truce-requested', requested)
+    diplomacy.requestTruce(A, B)
+
+    expect(requested).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op when a request is already pending for the pair', () => {
+    const bus = makeBus()
+    const diplomacy = initDiplomacy(bus, makeStore())
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+
+    const requested = vi.fn()
+    bus.on('diplomacy:truce-requested', requested)
+    diplomacy.requestTruce(A, B) // duplicate
+    diplomacy.requestTruce(B, A) // reverse direction — same pair
+
+    expect(requested).not.toHaveBeenCalled()
+  })
+
+  it('stores the request with the correct requesterId and targetId', () => {
+    const store = makeStore()
+    const diplomacy = initDiplomacy(makeBus(), store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+
+    const [req] = Object.values(store.getSlice('diplomacy').pendingTruceRequests)
+    expect(req?.requesterId).toBe(A)
+    expect(req?.targetId).toBe(B)
+    expect(req?.requestedAtTurn).toBe(0)
+  })
+})
+
+// ── respondToTruceRequest ─────────────────────────────────────────────────────
+
+describe('respondToTruceRequest', () => {
+  it('accept: calls makePeace and emits truce-accepted', () => {
+    const bus = makeBus()
+    const store = makeStore()
+    const diplomacy = initDiplomacy(bus, store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+
+    const accepted = vi.fn()
+    const peaceMade = vi.fn()
+    bus.on('diplomacy:truce-accepted', accepted)
+    bus.on('diplomacy:peace-made', peaceMade)
+
+    diplomacy.respondToTruceRequest(A, B, true)
+
+    expect(accepted).toHaveBeenCalledWith({ requesterId: A, targetId: B })
+    expect(peaceMade).toHaveBeenCalledWith({ countryA: A, countryB: B })
+    expect(diplomacy.getRelation(A, B)?.status).toBe('truce')
+  })
+
+  it('accept: removes the pending request', () => {
+    const store = makeStore()
+    const diplomacy = initDiplomacy(makeBus(), store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+    diplomacy.respondToTruceRequest(A, B, true)
+
+    expect(Object.keys(store.getSlice('diplomacy').pendingTruceRequests)).toHaveLength(0)
+  })
+
+  it('reject: emits truce-rejected and does not change relation', () => {
+    const bus = makeBus()
+    const store = makeStore()
+    const diplomacy = initDiplomacy(bus, store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+
+    const rejected = vi.fn()
+    bus.on('diplomacy:truce-rejected', rejected)
+
+    diplomacy.respondToTruceRequest(A, B, false)
+
+    expect(rejected).toHaveBeenCalledWith({ requesterId: A, targetId: B })
+    expect(diplomacy.getRelation(A, B)?.status).toBe('war')
+  })
+
+  it('reject: removes the pending request', () => {
+    const store = makeStore()
+    const diplomacy = initDiplomacy(makeBus(), store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+    diplomacy.respondToTruceRequest(A, B, false)
+
+    expect(Object.keys(store.getSlice('diplomacy').pendingTruceRequests)).toHaveLength(0)
+  })
+
+  it('is a no-op when no pending request exists', () => {
+    const bus = makeBus()
+    const diplomacy = initDiplomacy(bus, makeStore())
+    diplomacy.declareWar(A, B)
+
+    const accepted = vi.fn()
+    bus.on('diplomacy:truce-accepted', accepted)
+    diplomacy.respondToTruceRequest(A, B, true)
+
+    expect(accepted).not.toHaveBeenCalled()
+    expect(diplomacy.getRelation(A, B)?.status).toBe('war')
+  })
+})
+
+// ── pending request expiry ────────────────────────────────────────────────────
+
+describe('pending truce request expiry', () => {
+  it('emits truce-rejected and removes the request after TRUCE_REQUEST_EXPIRY_TURNS turns', () => {
+    const bus = makeBus()
+    const store = makeStore(1) // 1 frame = 1 turn for easy testing
+    const diplomacy = initDiplomacy(bus, store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B) // requested at turn 0
+
+    const rejected = vi.fn()
+    bus.on('diplomacy:truce-rejected', rejected)
+
+    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
+
+    // TRUCE_REQUEST_EXPIRY_TURNS = 3; advance 2 turns — should still be pending
+    diplomacy.update(ctx)
+    diplomacy.update(ctx)
+    expect(rejected).not.toHaveBeenCalled()
+    expect(Object.keys(store.getSlice('diplomacy').pendingTruceRequests)).toHaveLength(1)
+
+    // 3rd turn — expires
+    diplomacy.update(ctx)
+    expect(rejected).toHaveBeenCalledWith({ requesterId: A, targetId: B })
+    expect(Object.keys(store.getSlice('diplomacy').pendingTruceRequests)).toHaveLength(0)
+  })
+
+  it('does not expire a request that was just answered', () => {
+    const bus = makeBus()
+    const store = makeStore(1)
+    const diplomacy = initDiplomacy(bus, store)
+    diplomacy.declareWar(A, B)
+    diplomacy.requestTruce(A, B)
+    diplomacy.respondToTruceRequest(A, B, false) // consumed
+
+    const rejected = vi.fn()
+    bus.on('diplomacy:truce-rejected', rejected)
+
+    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
+    for (let i = 0; i < 5; i++) diplomacy.update(ctx)
+
+    // Already removed, so expiry logic should find nothing to expire
+    expect(rejected).not.toHaveBeenCalled()
+  })
+})

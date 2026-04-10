@@ -4,6 +4,9 @@
 /** Number of turns a truce lasts after peace is made. */
 export const TRUCE_DURATION_TURNS = 5
 
+/** Number of turns a truce request stays open before it automatically expires. */
+export const TRUCE_REQUEST_EXPIRY_TURNS = 3
+
 /**
  * Returns a canonical, order-independent key for a pair of countries.
  * Always places the lexicographically smaller id first so the same pair

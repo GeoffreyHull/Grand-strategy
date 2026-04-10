@@ -95,6 +95,7 @@ function makeContext(
     aiState,
     diplomacyState: {
       relations: {},
+      pendingTruceRequests: {},
       currentTurn: 0,
       framesPerTurn: 100,
       ...diplomacyOverride,
@@ -103,6 +104,20 @@ function makeContext(
       technologies: {} as TechnologyState['technologies'],
       byCountry: {} as TechnologyState['byCountry'],
       ...technologyOverride,
+    },
+  }
+}
+
+/** Build a minimal war relation between two countries. */
+function warRelation(a: string, b: string): Record<string, DiplomacyState['relations'][string]> {
+  const [ca, cb] = a < b ? [a, b] : [b, a]
+  const key = `${ca}:${cb}`
+  return {
+    [key]: {
+      countryA: cid(ca),
+      countryB: cid(cb),
+      status: 'war',
+      truceExpiresAtTurn: null,
     },
   }
 }
@@ -496,6 +511,108 @@ describe('personality weighting', () => {
     }
 
     expect(researchCount).toBeGreaterThan(expandCount)
+  })
+})
+
+// ── SEEK_PEACE scoring ────────────────────────────────────────────────────────
+
+describe('SEEK_PEACE scoring', () => {
+  it('scores 0 when the country has no active wars', () => {
+    const ctrl = new AIController(mockEventBus())
+    // kharrath and solenne exist in DEFAULT_PERSONALITIES; no war set up
+    const mapState = makeMapState({ kharrath: 5, solenne: 5 })
+    const aiState = makeAIState()
+    const context = makeContext(mapState, aiState) // no wars
+
+    // SEEK_PEACE raw score is 0 when not at war, so it should never win
+    let total = 0
+    for (let i = 0; i < 20; i++) {
+      const d = ctrl.evaluateDecision(aiState.countries['kharrath']!, context, i)
+      if (d.action === 'SEEK_PEACE') total++
+    }
+    expect(total).toBe(0)
+  })
+
+  it('diplomat personality seeks peace more often than conqueror when losing', () => {
+    const ctrl = new AIController(mockEventBus())
+    // kharrath is at war with a much larger solenne — kharrath is losing
+    const mapState = makeMapState({ kharrath: 2, solenne: 10 })
+    const diplomacyState: Partial<DiplomacyState> = { relations: warRelation('kharrath', 'solenne') }
+
+    // Override kharrath's personality to be a diplomat for the diplomatic context
+    const diplomatAI = makeAIState({ kharrath: { personality: DEFAULT_PERSONALITIES['solenne']! } })
+    // kharrath keeps its conqueror personality in the default context
+    const conquerorAI = makeAIState()
+
+    const diplomatContext = makeContext(mapState, diplomatAI, diplomacyState)
+    const conquerorContext = makeContext(mapState, conquerorAI, diplomacyState)
+
+    let diplomatPeace = 0
+    let conquerorPeace = 0
+    for (let i = 0; i < 200; i++) {
+      if (ctrl.evaluateDecision(diplomatAI.countries['kharrath']!, diplomatContext, i).action === 'SEEK_PEACE') diplomatPeace++
+      if (ctrl.evaluateDecision(conquerorAI.countries['kharrath']!, conquerorContext, i).action === 'SEEK_PEACE') conquerorPeace++
+    }
+
+    expect(diplomatPeace).toBeGreaterThan(conquerorPeace)
+  })
+
+  it('SEEK_PEACE targets the war enemy with the most provinces', () => {
+    const ctrl = new AIController(mockEventBus())
+    // kharrath is at war with solenne; solenne is the stronger enemy
+    const mapState = makeMapState({ kharrath: 3, solenne: 8 })
+    const diplomacyState: Partial<DiplomacyState> = { relations: warRelation('kharrath', 'solenne') }
+    // Give kharrath a diplomat personality so it prefers SEEK_PEACE
+    const aiState = makeAIState({ kharrath: { personality: DEFAULT_PERSONALITIES['solenne']! } })
+    const context = makeContext(mapState, aiState, diplomacyState)
+
+    // Over many trials, every SEEK_PEACE decision should target solenne
+    for (let i = 0; i < 100; i++) {
+      const d = ctrl.evaluateDecision(aiState.countries['kharrath']!, context, i)
+      if (d.action === 'SEEK_PEACE') {
+        expect(d.targetCountryId).toBe(cid('solenne'))
+      }
+    }
+  })
+})
+
+// ── evaluateTruceResponse ─────────────────────────────────────────────────────
+
+describe('evaluateTruceResponse', () => {
+  it('conqueror winning decisively rejects more often than it accepts', () => {
+    const ctrl = new AIController(mockEventBus())
+    // kharrath (conqueror) has far more provinces than solenne → clearly winning
+    const mapState = makeMapState({ solenne: 2, kharrath: 12 })
+    const aiState = makeAIState() // kharrath is conqueror by default
+    const context = makeContext(mapState, aiState)
+
+    // solenne (requester) → kharrath (responder/target)
+    let acceptCount = 0
+    for (let i = 0; i < 100; i++) {
+      if (ctrl.evaluateTruceResponse(cid('solenne'), cid('kharrath'), context)) acceptCount++
+    }
+    expect(acceptCount).toBeLessThan(30) // rejects most of the time
+  })
+
+  it('diplomat losing accepts more often than it rejects', () => {
+    const ctrl = new AIController(mockEventBus())
+    // kharrath (requester) has far more provinces; solenne (diplomat, responder) is struggling
+    const mapState = makeMapState({ kharrath: 12, solenne: 2 })
+    const aiState = makeAIState() // solenne is diplomat by default
+    const context = makeContext(mapState, aiState)
+
+    // kharrath (requester) → solenne (responder/target)
+    let acceptCount = 0
+    for (let i = 0; i < 100; i++) {
+      if (ctrl.evaluateTruceResponse(cid('kharrath'), cid('solenne'), context)) acceptCount++
+    }
+    expect(acceptCount).toBeGreaterThan(60) // accepts most of the time
+  })
+
+  it('returns false when the target country does not exist in AI state', () => {
+    const ctrl = new AIController(mockEventBus())
+    const context = makeContext(makeMapState(), makeAIState())
+    expect(ctrl.evaluateTruceResponse(cid('unknown-a'), cid('unknown-b'), context)).toBe(false)
   })
 })
 

@@ -5,7 +5,7 @@ import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
 import type { CountryId } from '@contracts/mechanics/map'
 import type { DiplomaticRelation, DiplomaticStatus, DiplomacyState } from '@contracts/mechanics/diplomacy'
-import { makeRelationKey, sortedPair, TRUCE_DURATION_TURNS } from './types'
+import { makeRelationKey, sortedPair, TRUCE_DURATION_TURNS, TRUCE_REQUEST_EXPIRY_TURNS } from './types'
 
 // ── Default frames-per-turn (100 frames ≈ 5 s at 20 Hz) ──────────────────────
 
@@ -16,6 +16,7 @@ export const DEFAULT_FRAMES_PER_TURN = 100
 export function buildDiplomacyState(framesPerTurn = DEFAULT_FRAMES_PER_TURN): DiplomacyState {
   return {
     relations: {},
+    pendingTruceRequests: {},
     currentTurn: 0,
     framesPerTurn,
   }
@@ -100,6 +101,22 @@ export interface DiplomacyMechanic {
    * Silently ignored if already allied.
    */
   formAlliance: (countryA: CountryId, countryB: CountryId) => void
+
+  /**
+   * Submit a truce request from requesterId to targetId.
+   * - Blocked unless the two countries are currently at war.
+   * - Silently ignored if a request for this pair is already pending.
+   * - Emits diplomacy:truce-requested so the target can respond.
+   */
+  requestTruce: (requesterId: CountryId, targetId: CountryId) => void
+
+  /**
+   * Resolve a pending truce request.
+   * - If accept is true: calls makePeace and emits diplomacy:truce-accepted.
+   * - If accept is false: emits diplomacy:truce-rejected.
+   * - Silently ignored if no pending request exists for this pair.
+   */
+  respondToTruceRequest: (requesterId: CountryId, targetId: CountryId, accept: boolean) => void
 
   /** Returns the full relation record, or null if no explicit relation exists (implies neutral). */
   getRelation: (countryA: CountryId, countryB: CountryId) => DiplomaticRelation | null
@@ -250,6 +267,55 @@ export function initDiplomacy(
     bus.emit('diplomacy:relation-changed', { countryA, countryB, oldStatus: currentStatus, newStatus: 'allied' })
   }
 
+  // ── requestTruce ──────────────────────────────────────────────────────────────
+
+  function requestTruce(requesterId: CountryId, targetId: CountryId): void {
+    const { relations, pendingTruceRequests, currentTurn } = store.getSlice('diplomacy')
+
+    // Only valid while at war
+    if (getStatus(requesterId, targetId, relations) !== 'war') return
+
+    // One pending request per pair at a time
+    const key = makeRelationKey(requesterId as string, targetId as string)
+    if (pendingTruceRequests[key] !== undefined) return
+
+    store.setState(draft => ({
+      ...draft,
+      diplomacy: {
+        ...draft.diplomacy,
+        pendingTruceRequests: {
+          ...draft.diplomacy.pendingTruceRequests,
+          [key]: { requesterId, targetId, requestedAtTurn: currentTurn },
+        },
+      },
+    }))
+
+    bus.emit('diplomacy:truce-requested', { requesterId, targetId })
+  }
+
+  // ── respondToTruceRequest ─────────────────────────────────────────────────────
+
+  function respondToTruceRequest(requesterId: CountryId, targetId: CountryId, accept: boolean): void {
+    const { pendingTruceRequests } = store.getSlice('diplomacy')
+    const key = makeRelationKey(requesterId as string, targetId as string)
+    const pending = pendingTruceRequests[key]
+    if (pending === undefined) return
+
+    // Remove the pending request
+    store.setState(draft => {
+      const next = { ...draft.diplomacy.pendingTruceRequests }
+      delete next[key]
+      return { ...draft, diplomacy: { ...draft.diplomacy, pendingTruceRequests: next } }
+    })
+
+    if (accept) {
+      makePeace(pending.requesterId, pending.targetId)
+      bus.emit('diplomacy:truce-accepted', { requesterId: pending.requesterId, targetId: pending.targetId })
+    } else {
+      bus.emit('diplomacy:truce-rejected', { requesterId: pending.requesterId, targetId: pending.targetId })
+    }
+  }
+
   // ── canAttack ─────────────────────────────────────────────────────────────────
 
   function canAttack(attackerId: CountryId, targetId: CountryId): boolean {
@@ -293,7 +359,22 @@ export function initDiplomacy(
         newStatus: 'neutral',
       })
     }
+
+    // Expire unanswered truce requests
+    const { pendingTruceRequests } = store.getSlice('diplomacy')
+    const expiredRequests = Object.values(pendingTruceRequests).filter(
+      r => r.requestedAtTurn + TRUCE_REQUEST_EXPIRY_TURNS <= currentTurn,
+    )
+    for (const req of expiredRequests) {
+      const key = makeRelationKey(req.requesterId as string, req.targetId as string)
+      store.setState(draft => {
+        const next = { ...draft.diplomacy.pendingTruceRequests }
+        delete next[key]
+        return { ...draft, diplomacy: { ...draft.diplomacy, pendingTruceRequests: next } }
+      })
+      bus.emit('diplomacy:truce-rejected', { requesterId: req.requesterId, targetId: req.targetId })
+    }
   }
 
-  return { update, canAttack, declareWar, makePeace, signNonAggressionPact, formAlliance, getRelation, destroy: () => {} }
+  return { update, canAttack, declareWar, makePeace, signNonAggressionPact, formAlliance, requestTruce, respondToTruceRequest, getRelation, destroy: () => {} }
 }

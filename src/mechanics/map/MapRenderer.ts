@@ -4,7 +4,7 @@
 import type { MapState } from '@contracts/state'
 import type { Country, Province } from '@contracts/mechanics/map'
 import { hexToPixel, hexCorners, hexNeighbors, cellKey } from './HexGrid'
-import type { HexRenderConfig } from './types'
+import type { HexRenderConfig, AttackArrow } from './types'
 import { applyTransform, resetTransform } from './Camera'
 import type { CameraState } from './Camera'
 
@@ -53,7 +53,7 @@ export class MapRenderer {
     this.canvas.height = height
   }
 
-  render(state: Readonly<MapState>, camera: CameraState): void {
+  render(state: Readonly<MapState>, camera: CameraState, arrows: readonly AttackArrow[] = []): void {
     const { ctx, cfg } = this
     const { width, height } = this.canvas
 
@@ -226,7 +226,115 @@ export class MapRenderer {
       }
     }
 
+    // 8. Attack arrows (world space — drawn above all province content)
+    if (arrows.length > 0) {
+      const ARROW_DISPLAY_MS = 4000
+      const ARROW_FADE_MS    = 1200
+      const now = Date.now()
+
+      for (const arrow of arrows) {
+        const age = now - arrow.createdAt
+        if (age >= ARROW_DISPLAY_MS) continue
+
+        // Fade out during the last ARROW_FADE_MS
+        const fadeStart = ARROW_DISPLAY_MS - ARROW_FADE_MS
+        const alpha = age > fadeStart
+          ? 1 - (age - fadeStart) / ARROW_FADE_MS
+          : 1
+
+        // Origin: centroid of all cells across all attacker-adjacent provinces
+        let fromX = 0, fromY = 0, fromCount = 0
+        for (const pid of arrow.fromProvinceIds) {
+          const p = state.provinces[pid]
+          if (!p) continue
+          for (const cell of p.cells) {
+            const { x, y } = hexToPixel(cell.col, cell.row, cfg.hexSize)
+            fromX += x + cfg.offsetX
+            fromY += y + cfg.offsetY
+            fromCount++
+          }
+        }
+        if (fromCount === 0) continue
+        fromX /= fromCount
+        fromY /= fromCount
+
+        // Destination: centroid of target province cells
+        const toProvince = state.provinces[arrow.toProvinceId]
+        if (!toProvince) continue
+        let toX = 0, toY = 0
+        for (const cell of toProvince.cells) {
+          const { x, y } = hexToPixel(cell.col, cell.row, cfg.hexSize)
+          toX += x + cfg.offsetX
+          toY += y + cfg.offsetY
+        }
+        toX /= toProvince.cells.length
+        toY /= toProvince.cells.length
+
+        // Shorten the arrow slightly so it doesn't overlap province centers
+        const dx = toX - fromX
+        const dy = toY - fromY
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist < 1) continue
+        const trim = Math.min(cfg.hexSize * 0.6, dist * 0.18)
+        const sx = fromX + (dx / dist) * trim
+        const sy = fromY + (dy / dist) * trim
+        const ex = toX   - (dx / dist) * trim
+        const ey = toY   - (dy / dist) * trim
+
+        // Green for successful capture, red for repelled attack
+        const color = arrow.result === 'conquered' ? '#22ee77' : '#ff4444'
+
+        this.drawAttackArrow(sx, sy, ex, ey, color, alpha, cfg.hexSize)
+      }
+    }
+
     // Reset transform after world-space drawing
     resetTransform(ctx)
+  }
+
+  /** Draw a single arrow from (x1,y1) to (x2,y2) in world space. */
+  private drawAttackArrow(
+    x1: number, y1: number,
+    x2: number, y2: number,
+    color: string,
+    alpha: number,
+    hexSize: number,
+  ): void {
+    const { ctx } = this
+    ctx.save()
+    ctx.globalAlpha = alpha
+
+    const angle   = Math.atan2(y2 - y1, x2 - x1)
+    const headLen = hexSize * 0.55
+    const headAngle = Math.PI / 6  // 30°
+
+    // Shaft
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.strokeStyle = color
+    ctx.lineWidth   = 3
+    ctx.lineCap     = 'round'
+    // Outer dark outline for readability
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'
+    ctx.shadowBlur  = 4
+    ctx.stroke()
+
+    // Arrowhead (filled triangle)
+    ctx.beginPath()
+    ctx.moveTo(x2, y2)
+    ctx.lineTo(
+      x2 - headLen * Math.cos(angle - headAngle),
+      y2 - headLen * Math.sin(angle - headAngle),
+    )
+    ctx.lineTo(
+      x2 - headLen * Math.cos(angle + headAngle),
+      y2 - headLen * Math.sin(angle + headAngle),
+    )
+    ctx.closePath()
+    ctx.fillStyle = color
+    ctx.fill()
+
+    ctx.restore()
   }
 }

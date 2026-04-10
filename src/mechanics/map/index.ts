@@ -14,6 +14,7 @@ import { WORLD_COUNTRIES, WORLD_PROVINCES } from './WorldData'
 import { MapRenderer } from './MapRenderer'
 import { MapInteraction } from './MapInteraction'
 import type { CameraState } from './Camera'
+import type { AttackArrow } from './types'
 
 // Re-export public contract types for callers that import from this mechanic.
 export type { Province, Country, Territory, TerritoryId, ProvinceId, CountryId }
@@ -182,6 +183,10 @@ export function initMapMechanic(
   // Track the game frame of the most recent AI decision for combat log labelling.
   let currentDecisionFrame = 0
 
+  // Transient attack arrows — pure UI state, not part of GameState.
+  const ARROW_DISPLAY_MS = 4000
+  const attackArrows: AttackArrow[] = []
+
   // Track active wars via diplomacy events so province capture can be gated on war status.
   const activeWars = new Set<string>()
   const warKey = (a: CountryId, b: CountryId): string => [a, b].sort().join(':')
@@ -326,7 +331,17 @@ export function initMapMechanic(
 
     // ── Outcome ───────────────────────────────────────────────────────────────
 
-    if (attackStrength > defenseStrength) {
+    const attackWon = attackStrength > defenseStrength
+
+    // Record a transient arrow for rendering (expires after ARROW_DISPLAY_MS).
+    attackArrows.push({
+      fromProvinceIds: [...attackerAdjacent],
+      toProvinceId: targetId,
+      result: attackWon ? 'conquered' : 'repelled',
+      createdAt: Date.now(),
+    })
+
+    if (attackWon) {
       stateStore.setState(draft => {
         const oldOwner = draft.map.countries[oldOwnerId]
         const newOwner = draft.map.countries[newOwnerId]
@@ -400,7 +415,14 @@ export function initMapMechanic(
   })
 
   return {
-    render:  () => renderer.render(stateStore.getSlice('map'), camera),
+    render: () => {
+      // Prune expired arrows before rendering
+      const cutoff = Date.now() - ARROW_DISPLAY_MS
+      while (attackArrows.length > 0 && attackArrows[0].createdAt < cutoff) {
+        attackArrows.shift()
+      }
+      renderer.render(stateStore.getSlice('map'), camera, attackArrows)
+    },
     destroy: () => {
       interaction.destroy()
       window.removeEventListener('resize', resize)

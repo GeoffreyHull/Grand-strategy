@@ -38,7 +38,7 @@ export interface AICountryState {
   readonly countryId: CountryId
   readonly isPlayerControlled: boolean
   readonly personality: AIPersonality
-  readonly lastDecision: AIDecision | null
+  readonly lastDecisions: readonly AIDecision[]
   readonly lastDecisionFrame: number
 }
 

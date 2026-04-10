@@ -154,10 +154,10 @@ describe('buildAIState', () => {
     }
   })
 
-  it('lastDecision is null for all nations initially', () => {
+  it('lastDecisions is empty for all nations initially', () => {
     const state = buildAIState()
     for (const cs of Object.values(state.countries)) {
-      expect(cs.lastDecision).toBeNull()
+      expect(cs.lastDecisions).toHaveLength(0)
     }
   })
 })
@@ -367,7 +367,8 @@ describe('AIController.update — decision interval', () => {
     const changed = ctrl.update(60, context)
 
     expect(changed.length).toBe(20)
-    expect(bus.emit).toHaveBeenCalledTimes(20)
+    // Each nation takes at least 1 action; aggressive ones may take more.
+    expect((bus.emit as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(20)
   })
 
   it('skips player-controlled countries', () => {

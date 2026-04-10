@@ -13,6 +13,7 @@ import { cellKey, hexNeighbors } from './HexGrid'
 import { WORLD_COUNTRIES, WORLD_PROVINCES } from './WorldData'
 import { MapRenderer } from './MapRenderer'
 import { MapInteraction } from './MapInteraction'
+import { renderLeaderboard } from './LeaderboardRenderer'
 import type { CameraState } from './Camera'
 import type { AttackArrow } from './types'
 
@@ -221,6 +222,13 @@ export function initMapMechanic(
   // Populate static legend
   populateLegend(stateStore.getSlice('map').countries)
 
+  // Initial leaderboard render
+  renderLeaderboard(stateStore)
+
+  function refreshLeaderboard(): void {
+    renderLeaderboard(stateStore)
+  }
+
   function refreshPanel(): void {
     const s = stateStore.getState()
     updateInfoPanel(s.map, s.military, s.buildings, s.economy)
@@ -250,6 +258,13 @@ export function initMapMechanic(
   eventBus.on('map:province-conquered', refreshPanel)
   eventBus.on('economy:income-collected', refreshPanel)
   eventBus.on('economy:gold-deducted', refreshPanel)
+
+  // Refresh leaderboard on events that change country standings
+  eventBus.on('map:province-conquered', refreshLeaderboard)
+  eventBus.on('military:army-raised', refreshLeaderboard)
+  eventBus.on('military:army-destroyed', refreshLeaderboard)
+  eventBus.on('economy:income-collected', refreshLeaderboard)
+  eventBus.on('economy:gold-deducted', refreshLeaderboard)
 
   // Handle AI expansion with combat resolution
   eventBus.on('ai:decision-made', ({ decision }) => {

@@ -337,12 +337,188 @@
       text-shadow: 0 0 20px rgba(232,197,58,0.4);
       pointer-events: none;
     }
+
+    #leaderboard {
+      position: absolute;
+      top: 12px; left: 12px;
+      background: rgba(10, 15, 26, 0.88);
+      border: 1px solid #4a6a9a;
+      border-radius: 4px;
+      padding: 10px 12px;
+      width: 260px;
+      max-height: calc(100vh - 40px);
+      pointer-events: all;
+    }
+
+    #leaderboard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #leaderboard h3 {
+      font-size: 11px;
+      color: #e8c53a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0;
+    }
+
+    #leaderboard-toggle {
+      font-size: 10px;
+      color: #e8c53a;
+      line-height: 1;
+      transition: transform 0.2s ease;
+    }
+
+    #leaderboard.collapsed #leaderboard-toggle {
+      transform: rotate(-90deg);
+    }
+
+    #leaderboard.collapsed #leaderboard-header:hover {
+      background: rgba(74, 106, 154, 0.25);
+      border-radius: 3px;
+      margin: -3px -4px;
+      padding: 3px 4px;
+    }
+
+    #leaderboard-body {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 600px;
+      opacity: 1;
+      margin-top: 8px;
+      border-top: 1px solid #2a3a5a;
+      padding-top: 6px;
+    }
+
+    #leaderboard.collapsed #leaderboard-body {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+
+    #leaderboard-list {
+      max-height: 360px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* Column header row — same grid as lb-row */
+    .lb-header-row {
+      display: grid;
+      grid-template-columns: 20px 12px 1fr auto;
+      gap: 4px;
+      align-items: center;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #6a7a9a;
+      padding: 0 2px 4px;
+      border-bottom: 1px solid #2a3a5a;
+      margin-bottom: 2px;
+    }
+
+    .lb-row {
+      display: grid;
+      grid-template-columns: 20px 12px 1fr auto;
+      gap: 4px;
+      align-items: center;
+      font-size: 11px;
+      padding: 3px 2px;
+      border-radius: 3px;
+      transition: background 0.1s;
+    }
+
+    .lb-row:hover {
+      background: rgba(74, 106, 154, 0.15);
+    }
+
+    .lb-row--eliminated {
+      opacity: 0.4;
+    }
+
+    .lb-rank {
+      font-size: 10px;
+      color: #6a7a9a;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .lb-swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .lb-name {
+      color: #c8c0a0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 10px;
+    }
+
+    .lb-stats {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .lb-stat {
+      font-size: 10px;
+      color: #e8d9b0;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      min-width: 24px;
+    }
+
+    .lb-stat--str {
+      color: #e07a7a;
+      min-width: 30px;
+    }
+
+    .lb-stat--gold {
+      color: #e8c53a;
+      min-width: 36px;
+    }
+
   </style>
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
   <div id="ui-overlay">
     <div id="title-bar">Grand Strategy</div>
+    <div id="leaderboard">
+      <div id="leaderboard-header" title="Click to expand/collapse">
+        <h3>Leaderboard</h3>
+        <span id="leaderboard-toggle">▼</span>
+      </div>
+      <div id="leaderboard-body">
+        <div class="lb-header-row">
+          <span></span>
+          <span></span>
+          <span>Nation</span>
+          <span class="lb-stats">
+            <span class="lb-stat" title="Provinces">Prov</span>
+            <span class="lb-stat lb-stat--str" title="Military Strength">Str</span>
+            <span class="lb-stat lb-stat--gold" title="Gold">Gold</span>
+          </span>
+        </div>
+        <div id="leaderboard-list"></div>
+      </div>
+    </div>
     <div id="info-panel" class="empty">
       <h2>Select a Province</h2>
       <p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>
@@ -370,6 +546,9 @@
   </div>
   <script type="module" src="/src/main.ts"></script>
   <script>
+    document.getElementById('leaderboard-header').addEventListener('click', function() {
+      document.getElementById('leaderboard').classList.toggle('collapsed');
+    });
     document.getElementById('legend-header').addEventListener('click', function() {
       document.getElementById('legend').classList.toggle('collapsed');
     });

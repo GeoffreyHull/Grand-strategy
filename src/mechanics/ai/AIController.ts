@@ -22,11 +22,12 @@ const TOTAL_TECH_COUNT = 8
 // Maximum repetitions of each action type within a single decision batch.
 // Limits how many times the same category of action can fire per turn.
 const ACTION_MAX_REPS: Readonly<Record<AIActionType, number>> = {
-  EXPAND:   2,  // can declare war on up to 2 nations
-  FORTIFY:  3,  // can raise up to 3 armies
-  ALLY:     2,  // can form up to 2 alliances
-  ISOLATE:  2,  // can fortify up to 2 provinces
-  RESEARCH: 1,  // queue at most 1 tech per decision
+  EXPAND:     2,  // can declare war on up to 2 nations
+  FORTIFY:    3,  // can raise up to 3 armies
+  ALLY:       2,  // can form up to 2 alliances
+  ISOLATE:    2,  // can fortify up to 2 provinces
+  RESEARCH:   1,  // queue at most 1 tech per decision
+  SEEK_PEACE: 1,  // request truce with at most 1 enemy per decision
 }
 
 // ── Utility scoring ───────────────────────────────────────────────────────────
@@ -130,6 +131,46 @@ function scoreResearch(countryId: CountryId, technologyState: TechnologyState): 
   return remaining / TOTAL_TECH_COUNT
 }
 
+/**
+ * Score the SEEK_PEACE action (0–1).
+ * Returns 0 when the country has no active wars.
+ * Otherwise, cost rises when facing more total enemy provinces (power deficit),
+ * fighting on multiple fronts, or when the personality is cautious/diplomatic.
+ * Conquerors and zealots suppress this score via their low caution/high aggression.
+ */
+function scoreSeekPeace(
+  countryId: CountryId,
+  mapState: MapState,
+  diplomacyState: DiplomacyState,
+  personality: AIPersonality,
+): number {
+  const enemies = Object.values(diplomacyState.relations).filter(
+    r => r.status === 'war' && (r.countryA === countryId || r.countryB === countryId),
+  )
+  if (enemies.length === 0) return 0
+
+  const ownProvinces = mapState.countries[countryId]?.provinceIds.length ?? 0
+  if (ownProvinces === 0) return 0
+
+  // Combined province count across all belligerents
+  const totalEnemyProvinces = enemies.reduce((sum, r) => {
+    const enemyId = r.countryA === countryId ? r.countryB : r.countryA
+    return sum + (mapState.countries[enemyId]?.provinceIds.length ?? 0)
+  }, 0)
+
+  // Power deficit: 0 when even, rises toward 1 as enemy grows stronger
+  const powerRatio = ownProvinces / Math.max(1, totalEnemyProvinces)
+  const powerDeficit = Math.max(0, 1 - powerRatio)
+
+  // Multi-front penalty: each additional war adds pressure
+  const multiFrontPenalty = Math.min(0.3, (enemies.length - 1) * 0.15)
+
+  // Personality: cautious/diplomatic characters feel war cost more acutely
+  const personalityUrge = personality.caution * 0.4 + (1 - personality.aggression) * 0.3
+
+  return Math.min(1, powerDeficit * 0.5 + personalityUrge * 0.4 + multiFrontPenalty)
+}
+
 // ── AIController ──────────────────────────────────────────────────────────────
 
 export class AIController {
@@ -203,6 +244,10 @@ export class AIController {
         action: 'RESEARCH',
         score: scoreResearch(countryId, technologyState) * personality.economy + Math.random() * 0.1,
       },
+      {
+        action: 'SEEK_PEACE',
+        score: scoreSeekPeace(countryId, mapState, diplomacyState, personality) + Math.random() * 0.1,
+      },
     ]
 
     const best = candidates.reduce((a, b) => (b.score > a.score ? b : a))
@@ -212,6 +257,8 @@ export class AIController {
       targetCountryId = this.findAllyTarget(countryId, aiState, diplomacyState)
     } else if (best.action === 'EXPAND') {
       targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState)
+    } else if (best.action === 'SEEK_PEACE') {
+      targetCountryId = this.findWarEnemy(countryId, mapState, diplomacyState)
     }
 
     return {
@@ -265,6 +312,10 @@ export class AIController {
         action: 'RESEARCH',
         score: scoreResearch(countryId, technologyState) * personality.economy + Math.random() * 0.1,
       },
+      {
+        action: 'SEEK_PEACE',
+        score: scoreSeekPeace(countryId, mapState, diplomacyState, personality) + Math.random() * 0.1,
+      },
     ]
 
     // Cautious AIs require higher-scoring actions before acting; aggressive AIs have a lower bar.
@@ -284,6 +335,7 @@ export class AIController {
     // Track which targets have already been chosen this batch to avoid duplicates.
     const usedWarTargets = new Set<CountryId>()
     const usedAllyTargets = new Set<CountryId>()
+    const usedPeaceTargets = new Set<CountryId>()
 
     for (const candidate of eligible) {
       if (decisions.length >= maxActions) break
@@ -308,6 +360,10 @@ export class AIController {
           // No more unique war targets available — stop repeating this action.
           if (targetCountryId === null && r > 0) break
           if (targetCountryId !== null) usedWarTargets.add(targetCountryId)
+        } else if (candidate.action === 'SEEK_PEACE') {
+          targetCountryId = this.findWarEnemy(countryId, mapState, diplomacyState, usedPeaceTargets)
+          if (targetCountryId === null && r > 0) break
+          if (targetCountryId !== null) usedPeaceTargets.add(targetCountryId)
         }
 
         decisions.push({
@@ -328,6 +384,8 @@ export class AIController {
         targetCountryId = this.findAllyTarget(countryId, aiState, diplomacyState)
       } else if (best.action === 'EXPAND') {
         targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState)
+      } else if (best.action === 'SEEK_PEACE') {
+        targetCountryId = this.findWarEnemy(countryId, mapState, diplomacyState)
       }
       decisions.push({
         countryId,
@@ -339,6 +397,40 @@ export class AIController {
     }
 
     return decisions
+  }
+
+  /**
+   * Find the best enemy to seek peace with for a SEEK_PEACE decision.
+   * Prefers the enemy with the most provinces (the biggest threat) so the AI
+   * tries to end its most dangerous war first.
+   * Returns null when the country has no active wars.
+   */
+  private findWarEnemy(
+    countryId: CountryId,
+    mapState: MapState,
+    diplomacyState: DiplomacyState,
+    excluded: ReadonlySet<CountryId> = new Set(),
+  ): CountryId | null {
+    let best: CountryId | null = null
+    let bestProvinceCount = -1
+
+    for (const relation of Object.values(diplomacyState.relations)) {
+      if (relation.status !== 'war') continue
+      const enemyId = relation.countryA === countryId
+        ? relation.countryB
+        : relation.countryB === countryId
+          ? relation.countryA
+          : null
+      if (enemyId === null || excluded.has(enemyId)) continue
+
+      const count = mapState.countries[enemyId]?.provinceIds.length ?? 0
+      if (count > bestProvinceCount) {
+        bestProvinceCount = count
+        best = enemyId
+      }
+    }
+
+    return best
   }
 
   /** Find the most diplomatically compatible ally candidate, excluding already-chosen targets. */
@@ -404,5 +496,45 @@ export class AIController {
     }
 
     return best
+  }
+
+  /**
+   * Evaluate whether the AI-controlled targetId should accept a truce request
+   * from requesterId.
+   *
+   * Accept probability rises when:
+   * - The responder is cautious or diplomatic (caution, diplomacy personality weights)
+   * - The responder is not winning decisively (province ratio close to or below 1)
+   *
+   * Reject probability rises when:
+   * - The responder's aggression is high (conquerors, zealots)
+   * - The responder has significantly more provinces (clearly winning the war)
+   *
+   * Returns true = accept, false = reject.
+   */
+  evaluateTruceResponse(
+    requesterId: CountryId,
+    targetId: CountryId,
+    context: AIContext,
+  ): boolean {
+    const responder = context.aiState.countries[targetId]
+    if (responder === undefined) return false
+
+    const { personality } = responder
+    const ownProvinces = context.mapState.countries[targetId]?.provinceIds.length ?? 0
+    const enemyProvinces = context.mapState.countries[requesterId]?.provinceIds.length ?? 0
+
+    // How much larger the responder is relative to the requester:
+    // > 1.5 → winning decisively → lean toward rejecting
+    // < 1.0 → struggling → lean toward accepting
+    const powerRatio = ownProvinces / Math.max(1, enemyProvinces)
+    const winningBonus = Math.max(0, powerRatio - 1.0) * 0.4
+
+    // Personality-driven acceptance base
+    const acceptanceBase = personality.diplomacy * 0.5 + personality.caution * 0.3
+    const aggressionPenalty = personality.aggression * 0.4
+
+    const acceptScore = acceptanceBase - aggressionPenalty - winningBonus + Math.random() * 0.1
+    return acceptScore > 0.25
   }
 }

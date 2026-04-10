@@ -10,8 +10,23 @@ export interface DiplomaticRelation {
   readonly truceExpiresAtTurn: number | null
 }
 
+/** A truce request sent by one belligerent to the other during an active war. */
+export interface PendingTruceRequest {
+  /** The country that initiated the request. */
+  readonly requesterId: CountryId
+  /** The country being asked to accept or reject. */
+  readonly targetId: CountryId
+  /** Turn on which the request was made; expires after TRUCE_REQUEST_EXPIRY_TURNS. */
+  readonly requestedAtTurn: number
+}
+
 export interface DiplomacyState {
   readonly relations: Readonly<Record<string, DiplomaticRelation>>
+  /**
+   * Pending truce requests, keyed by the canonical pair key ("smallerId:largerId").
+   * At most one pending request per belligerent pair at any time.
+   */
+  readonly pendingTruceRequests: Readonly<Record<string, PendingTruceRequest>>
   readonly currentTurn: number
   readonly framesPerTurn: number
 }

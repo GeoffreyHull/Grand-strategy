@@ -30,6 +30,7 @@ import {
   buildTechnologyState,
   initTechnologyMechanic,
   loadTechnologyConfig,
+  requestResearchTechnology,
   DEFAULT_TECHNOLOGY_CONFIG,
 } from './mechanics/technology/index'
 import {
@@ -220,6 +221,22 @@ eventBus.on('ai:decision-made', ({ decision }) => {
     // Build walls in a random province
     const target = provinces[Math.floor(Math.random() * provinces.length)]
     requestBuildBuilding(eventBus, stateStore, countryId, target.id, 'walls', buildingsConfig)
+
+  } else if (action === 'RESEARCH') {
+    // Pick a random undiscovered technology and queue it at the capital province
+    const known = new Set(stateStore.getSlice('technology').byCountry[countryId] ?? [])
+    const allTechs = [
+      'agriculture', 'iron-working', 'steel-working', 'trade-routes',
+      'writing', 'siege-engineering', 'cartography', 'bureaucracy',
+    ] as const
+    const available = allTechs.filter(t => !known.has(t))
+    if (available.length > 0) {
+      const techType = available[Math.floor(Math.random() * available.length)]
+      const capitalId = mapState.countries[countryId]?.capitalProvinceId
+      if (capitalId !== undefined) {
+        requestResearchTechnology(eventBus, stateStore, countryId, capitalId, techType, technologyConfig)
+      }
+    }
   }
 })
 

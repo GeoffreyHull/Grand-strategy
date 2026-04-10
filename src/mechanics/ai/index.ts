@@ -8,6 +8,7 @@ import type { EventMap } from '@contracts/events'
 import type { GameState } from '@contracts/state'
 import type { AIState, AICountryState } from '@contracts/mechanics/ai'
 import type { CountryId } from '@contracts/mechanics/map'
+import type { AIContext } from './types'
 import { DEFAULT_PERSONALITIES } from './personalities'
 import { AIController } from './AIController'
 
@@ -83,9 +84,15 @@ export function initAIMechanic(
 
   function update(ctx: TickContext): void {
     const { frame } = ctx
-    const { map, ai } = stateStore.getState()
+    const state = stateStore.getState()
+    const context: AIContext = {
+      mapState:        state.map,
+      aiState:         state.ai,
+      diplomacyState:  state.diplomacy,
+      technologyState: state.technology,
+    }
 
-    const changed = controller.update(frame, map, ai)
+    const changed = controller.update(frame, context)
     if (changed.length === 0) return
 
     stateStore.setState(draft => {

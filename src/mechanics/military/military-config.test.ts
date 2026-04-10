@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { validateMilitaryConfig, DEFAULT_MILITARY_CONFIG } from './types'
 
-const VALID: unknown = { army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25 } }
+const VALID: unknown = { army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25, cost: 50 } }
 
 describe('DEFAULT_MILITARY_CONFIG', () => {
   it('has positive durationFrames', () => {
@@ -9,6 +9,9 @@ describe('DEFAULT_MILITARY_CONFIG', () => {
   })
   it('has positive strength', () => {
     expect(DEFAULT_MILITARY_CONFIG.army.strength).toBeGreaterThan(0)
+  })
+  it('has positive cost', () => {
+    expect(DEFAULT_MILITARY_CONFIG.army.cost).toBeGreaterThan(0)
   })
 })
 
@@ -70,7 +73,17 @@ describe('validateMilitaryConfig', () => {
   })
 
   it('accepts non-integer positive values', () => {
-    const result = validateMilitaryConfig({ army: { durationFrames: 1.5, strength: 50.5, barracksStrengthBonus: 0.5 } })
+    const result = validateMilitaryConfig({ army: { durationFrames: 1.5, strength: 50.5, barracksStrengthBonus: 0.5, cost: 25.5 } })
     expect(result.army.durationFrames).toBe(1.5)
+  })
+
+  it('throws when army.cost is missing', () => {
+    expect(() => validateMilitaryConfig({ army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25 } })).toThrow('military.army.cost')
+  })
+  it('throws when army.cost is zero', () => {
+    expect(() => validateMilitaryConfig({ army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25, cost: 0 } })).toThrow('military.army.cost')
+  })
+  it('throws when army.cost is negative', () => {
+    expect(() => validateMilitaryConfig({ army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25, cost: -10 } })).toThrow('military.army.cost')
   })
 })

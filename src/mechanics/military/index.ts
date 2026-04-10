@@ -31,10 +31,26 @@ export async function loadMilitaryConfig(
 
 export function requestBuildArmy(
   eventBus: EventBus<EventMap>,
+  stateStore: StateStore<GameState>,
   ownerId: CountryId,
   locationId: ProvinceId,
   config = DEFAULT_MILITARY_CONFIG,
 ): void {
+  const gold = stateStore.getState().economy?.countries[ownerId]?.gold ?? 0
+  if (gold < config.army.cost) {
+    eventBus.emit('military:army-build-rejected', {
+      ownerId,
+      locationId,
+      reason: 'insufficient-gold',
+    })
+    return
+  }
+
+  eventBus.emit('economy:gold-deducted', {
+    countryId: ownerId,
+    amount:    config.army.cost,
+    reason:    'army-recruitment',
+  })
   eventBus.emit('construction:request', {
     jobId:          crypto.randomUUID() as JobId,
     ownerId,

@@ -15,6 +15,7 @@ export interface ArmyConfig {
   readonly durationFrames: number
   readonly strength: number
   readonly barracksStrengthBonus: number
+  readonly cost: number
 }
 
 export interface MilitaryConfig {
@@ -22,7 +23,7 @@ export interface MilitaryConfig {
 }
 
 export const DEFAULT_MILITARY_CONFIG: MilitaryConfig = {
-  army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25 },
+  army: { durationFrames: 60, strength: 100, barracksStrengthBonus: 25, cost: 50 },
 }
 
 export function validateMilitaryConfig(raw: unknown): MilitaryConfig {
@@ -36,11 +37,13 @@ export function validateMilitaryConfig(raw: unknown): MilitaryConfig {
   assertPositiveFiniteNumber(army['durationFrames'],        'military.army.durationFrames')
   assertPositiveFiniteNumber(army['strength'],              'military.army.strength')
   assertPositiveFiniteNumber(army['barracksStrengthBonus'], 'military.army.barracksStrengthBonus')
+  assertPositiveFiniteNumber(army['cost'],                  'military.army.cost')
   return {
     army: {
       durationFrames:        army['durationFrames'] as number,
       strength:              army['strength'] as number,
       barracksStrengthBonus: army['barracksStrengthBonus'] as number,
+      cost:                  army['cost'] as number,
     },
   }
 }

@@ -85,6 +85,34 @@
       margin-bottom: 4px;
     }
 
+    /* Building chips in the info panel */
+    #info-panel .field--buildings { align-items: flex-start; }
+    #info-panel .building-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      justify-content: flex-end;
+    }
+    #info-panel .building-none {
+      color: #6a7a9a;
+      font-style: italic;
+      font-size: 11px;
+    }
+    #info-panel .building-chip {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-family: sans-serif;
+      letter-spacing: 0.3px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    #info-panel .building-chip--farm     { background: rgba(60,180,80,0.2);   border-color: rgba(60,180,80,0.6);   color: #7ed99a; }
+    #info-panel .building-chip--barracks { background: rgba(200,50,50,0.2);   border-color: rgba(200,50,50,0.6);   color: #e07a7a; }
+    #info-panel .building-chip--port     { background: rgba(50,120,200,0.2);  border-color: rgba(50,120,200,0.6);  color: #7aaee8; }
+    #info-panel .building-chip--walls    { background: rgba(130,130,140,0.2); border-color: rgba(130,130,140,0.6); color: #b0b0be; }
+
     #legend {
       position: absolute;
       bottom: 12px; left: 12px;

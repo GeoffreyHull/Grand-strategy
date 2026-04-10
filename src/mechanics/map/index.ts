@@ -133,7 +133,11 @@ function updateInfoPanel(
   const provinceBuildings = Object.values(buildings.buildings).filter(b => b.provinceId === provinceId)
 
   const armyStrength  = provinceArmies.reduce((sum, a) => sum + a.strength, 0)
-  const buildingNames = provinceBuildings.map(b => capitalise(b.buildingType)).join(', ') || 'None'
+  const buildingChipsHtml = provinceBuildings.length === 0
+    ? '<span class="building-none">None</span>'
+    : provinceBuildings
+        .map(b => `<span class="building-chip building-chip--${b.buildingType}">${capitalise(b.buildingType)}</span>`)
+        .join('')
 
   // Country-wide totals
   const countryArmies    = Object.values(military.armies).filter(a => a.countryId === country.id)
@@ -161,7 +165,7 @@ function updateInfoPanel(
     <div class="field"><span>Terrain</span><span>${capitalise(province.terrainType)}</span></div>
     <div class="field"><span>Coastal</span><span>${province.isCoastal ? 'Yes' : 'No'}</span></div>
     <div class="field"><span>Armies</span><span>${provinceArmies.length > 0 ? `${provinceArmies.length} (str ${armyStrength})` : 'None'}</span></div>
-    <div class="field"><span>Buildings</span><span>${buildingNames}</span></div>
+    <div class="field field--buildings"><span>Buildings</span><span class="building-chips">${buildingChipsHtml}</span></div>
   `
 }
 
@@ -421,7 +425,7 @@ export function initMapMechanic(
       while (attackArrows.length > 0 && attackArrows[0].createdAt < cutoff) {
         attackArrows.shift()
       }
-      renderer.render(stateStore.getSlice('map'), camera, attackArrows)
+      renderer.render(stateStore.getSlice('map'), camera, attackArrows, stateStore.getSlice('buildings'))
     },
     destroy: () => {
       interaction.destroy()

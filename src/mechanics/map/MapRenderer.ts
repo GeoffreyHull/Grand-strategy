@@ -3,6 +3,7 @@
 
 import type { MapState } from '@contracts/state'
 import type { Country, Province } from '@contracts/mechanics/map'
+import type { BuildingsState, Building, BuildingType } from '@contracts/mechanics/buildings'
 import { hexToPixel, hexCorners, hexNeighbors, cellKey } from './HexGrid'
 import type { HexRenderConfig, AttackArrow } from './types'
 import { applyTransform, resetTransform } from './Camera'
@@ -53,7 +54,7 @@ export class MapRenderer {
     this.canvas.height = height
   }
 
-  render(state: Readonly<MapState>, camera: CameraState, arrows: readonly AttackArrow[] = []): void {
+  render(state: Readonly<MapState>, camera: CameraState, arrows: readonly AttackArrow[] = [], buildings: Readonly<BuildingsState> = { buildings: {} }): void {
     const { ctx, cfg } = this
     const { width, height } = this.canvas
 
@@ -182,7 +183,15 @@ export class MapRenderer {
       }
     }
 
-    // 7. Province labels (shown when effective pixel size is large enough)
+    // Pre-compute per-province building types for icon rendering below
+    const buildingsByProvince = new Map<string, BuildingType[]>()
+    for (const b of Object.values(buildings.buildings) as Building[]) {
+      const list = buildingsByProvince.get(b.provinceId) ?? []
+      if (!list.includes(b.buildingType)) list.push(b.buildingType)
+      buildingsByProvince.set(b.provinceId, list)
+    }
+
+    // 7. Province labels + building icons (shown when effective pixel size is large enough)
     if (cfg.hexSize * camera.zoom >= 22) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -221,8 +230,16 @@ export class MapRenderer {
           ctx.fillStyle = isSelected || isHovered ? '#ffffff' : 'rgba(255,255,255,0.7)'
         }
 
-        ctx.fillText(label, cx, cy + (country?.capitalProvinceId === province.id ? cfg.hexSize * 0.1 : 0))
+        const labelY = cy + (country?.capitalProvinceId === province.id ? cfg.hexSize * 0.1 : 0)
+        ctx.fillText(label, cx, labelY)
         ctx.shadowBlur = 0
+
+        // Building icons below the label
+        const provinceBuildings = buildingsByProvince.get(province.id) ?? []
+        if (provinceBuildings.length > 0) {
+          const iconY = labelY + cfg.hexSize * 0.38 + 4
+          this.drawBuildingIcons(ctx, cx, iconY, provinceBuildings, cfg.hexSize)
+        }
       }
     }
 
@@ -335,6 +352,137 @@ export class MapRenderer {
     ctx.fillStyle = color
     ctx.fill()
 
+    ctx.restore()
+  }
+
+  /** Render a row of building-type icons centered at (centerX, iconTopY). */
+  private drawBuildingIcons(
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    iconTopY: number,
+    types: readonly BuildingType[],
+    hexSize: number,
+  ): void {
+    const MAX_ICONS = 4
+    const r = Math.max(4, hexSize * 0.13)
+    const GAP = r * 2.6
+    const shown = types.slice(0, MAX_ICONS)
+    const overflow = types.length > MAX_ICONS
+    const totalItems = shown.length + (overflow ? 1 : 0)
+    const startX = centerX - ((totalItems - 1) * GAP) / 2
+    const iconCY = iconTopY + r
+
+    ctx.save()
+    ctx.shadowBlur = 2
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'
+
+    shown.forEach((type, i) => {
+      this.drawBuildingGlyph(ctx, startX + i * GAP, iconCY, r, type)
+    })
+
+    if (overflow) {
+      const x = startX + shown.length * GAP
+      ctx.beginPath()
+      ctx.arc(x, iconCY, r, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(150,150,150,0.7)'
+      ctx.fill()
+      ctx.fillStyle = '#fff'
+      ctx.font = `bold ${Math.max(5, r * 1.2)}px sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('+', x, iconCY)
+    }
+
+    ctx.restore()
+  }
+
+  /** Draw a single building-type glyph: colored circle background + white symbol. */
+  private drawBuildingGlyph(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    r: number,
+    type: BuildingType,
+  ): void {
+    ctx.save()
+    switch (type) {
+      case 'farm': {
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(60,180,80,0.85)'
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+        ctx.lineWidth = r * 0.35
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(cx - r * 0.55, cy)
+        ctx.lineTo(cx + r * 0.55, cy)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx, cy - r * 0.55)
+        ctx.lineTo(cx, cy + r * 0.55)
+        ctx.stroke()
+        break
+      }
+      case 'barracks': {
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(200,50,50,0.85)'
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+        ctx.lineWidth = r * 0.3
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(cx, cy + r * 0.6)
+        ctx.lineTo(cx, cy - r * 0.55)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx - r * 0.5, cy - r * 0.2)
+        ctx.lineTo(cx + r * 0.5, cy - r * 0.2)
+        ctx.stroke()
+        break
+      }
+      case 'port': {
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(50,120,200,0.85)'
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+        ctx.lineWidth = r * 0.28
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(cx, cy - r * 0.6)
+        ctx.lineTo(cx, cy + r * 0.55)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx - r * 0.45, cy - r * 0.35)
+        ctx.lineTo(cx + r * 0.45, cy - r * 0.35)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx, cy + r * 0.55)
+        ctx.lineTo(cx - r * 0.45, cy + r * 0.2)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx, cy + r * 0.55)
+        ctx.lineTo(cx + r * 0.45, cy + r * 0.2)
+        ctx.stroke()
+        break
+      }
+      case 'walls': {
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(130,130,140,0.85)'
+        ctx.fill()
+        const mW = r * 0.32
+        const mH = r * 0.45
+        const baseY = cy + r * 0.25
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'
+        ctx.fillRect(cx - r * 0.55, baseY - mH, mW, mH)
+        ctx.fillRect(cx + r * 0.55 - mW, baseY - mH, mW, mH)
+        ctx.fillRect(cx - r * 0.55, baseY, r * 1.1, r * 0.25)
+        break
+      }
+    }
     ctx.restore()
   }
 }

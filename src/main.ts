@@ -204,7 +204,7 @@ eventBus.on('ai:decision-made', ({ decision }) => {
   } else if (action === 'FORTIFY') {
     // Raise an army in a random owned province
     const target = provinces[Math.floor(Math.random() * provinces.length)]
-    requestBuildArmy(eventBus, countryId, target.id, militaryConfig)
+    requestBuildArmy(eventBus, stateStore, countryId, target.id, militaryConfig)
 
   } else if (action === 'ALLY') {
     // Form an alliance with the target country, then build infrastructure

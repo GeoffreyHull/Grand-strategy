@@ -87,6 +87,11 @@ export interface EventMap {
     readonly countryId: CountryId
     readonly provinceId: ProvinceId
   }
+  'military:army-build-rejected': {
+    readonly ownerId: CountryId
+    readonly locationId: ProvinceId
+    readonly reason: 'insufficient-gold'
+  }
 
   // Navy mechanic events
   'navy:fleet-formed': {

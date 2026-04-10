@@ -35,12 +35,16 @@ function makeBuilding(id: string, provinceId: ProvinceId, buildingType: Building
   return { id: id as BuildingId, countryId: ownerId, provinceId, buildingType, completedFrame: 1 }
 }
 
-function makeStateStore(existingBuildings: Building[] = []) {
+function makeStateStore(existingBuildings: Building[] = [], gold = 1000) {
   const buildingMap = Object.fromEntries(existingBuildings.map(b => [b.id, b])) as Record<BuildingId, Building>
 
   let state: GameState = {
     military:  buildMilitaryState(),
     buildings: { buildings: buildingMap },
+    economy: {
+      provinces: {},
+      countries: { [ownerId]: { gold, modifiers: [] } },
+    },
   } as unknown as GameState
 
   return {
@@ -64,31 +68,87 @@ describe('buildMilitaryState', () => {
 
 describe('requestBuildArmy', () => {
   it('emits construction:request with buildableType army', () => {
-    const bus = makeMockEventBus()
-    requestBuildArmy(bus, ownerId, locationId)
+    const bus   = makeMockEventBus()
+    const store = makeStateStore()
+    requestBuildArmy(bus, store, ownerId, locationId)
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ buildableType: 'army' }))
   })
 
   it('emits construction:request with durationFrames 60', () => {
-    const bus = makeMockEventBus()
-    requestBuildArmy(bus, ownerId, locationId)
+    const bus   = makeMockEventBus()
+    const store = makeStateStore()
+    requestBuildArmy(bus, store, ownerId, locationId)
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: 60 }))
   })
 
   it('emits construction:request with empty metadata', () => {
-    const bus = makeMockEventBus()
-    requestBuildArmy(bus, ownerId, locationId)
+    const bus   = makeMockEventBus()
+    const store = makeStateStore()
+    requestBuildArmy(bus, store, ownerId, locationId)
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ metadata: {} }))
   })
 
   it('emits construction:request with a unique jobId each call', () => {
-    const bus = makeMockEventBus()
-    requestBuildArmy(bus, ownerId, locationId)
-    requestBuildArmy(bus, ownerId, locationId)
+    const bus   = makeMockEventBus()
+    const store = makeStateStore()
+    requestBuildArmy(bus, store, ownerId, locationId)
+    requestBuildArmy(bus, store, ownerId, locationId)
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) => c[0] === 'construction:request')
     const id1 = calls[0][1].jobId as JobId
     const id2 = calls[1][1].jobId as JobId
     expect(id1).not.toBe(id2)
+  })
+
+  it('deducts gold equal to army cost before construction starts', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([], DEFAULT_MILITARY_CONFIG.army.cost)
+    requestBuildArmy(bus, store, ownerId, locationId)
+    expect(bus.emit).toHaveBeenCalledWith('economy:gold-deducted', expect.objectContaining({
+      countryId: ownerId,
+      amount:    DEFAULT_MILITARY_CONFIG.army.cost,
+    }))
+  })
+
+  it('emits economy:gold-deducted before construction:request', () => {
+    const bus    = makeMockEventBus()
+    const store  = makeStateStore()
+    requestBuildArmy(bus, store, ownerId, locationId)
+    const eventNames = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0])
+    expect(eventNames.indexOf('economy:gold-deducted')).toBeLessThan(eventNames.indexOf('construction:request'))
+  })
+
+  it('emits military:army-build-rejected when gold is insufficient', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([], 0)
+    requestBuildArmy(bus, store, ownerId, locationId)
+    expect(bus.emit).toHaveBeenCalledWith('military:army-build-rejected', expect.objectContaining({
+      ownerId,
+      locationId,
+      reason: 'insufficient-gold',
+    }))
+  })
+
+  it('does not emit construction:request when gold is insufficient', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([], 0)
+    requestBuildArmy(bus, store, ownerId, locationId)
+    const constructionCalls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) => c[0] === 'construction:request')
+    expect(constructionCalls).toHaveLength(0)
+  })
+
+  it('does not emit construction:request when gold is exactly one below cost', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([], DEFAULT_MILITARY_CONFIG.army.cost - 1)
+    requestBuildArmy(bus, store, ownerId, locationId)
+    const constructionCalls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) => c[0] === 'construction:request')
+    expect(constructionCalls).toHaveLength(0)
+  })
+
+  it('allows build when gold equals exactly the cost', () => {
+    const bus   = makeMockEventBus()
+    const store = makeStateStore([], DEFAULT_MILITARY_CONFIG.army.cost)
+    requestBuildArmy(bus, store, ownerId, locationId)
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ buildableType: 'army' }))
   })
 })
 

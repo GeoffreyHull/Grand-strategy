@@ -20,38 +20,44 @@ See [CLAUDE.md](./CLAUDE.md) for the full architecture guide and agent conventio
 
 ---
 
-## TODO
+## Planned Features
 
-### Mechanics — Missing
+### New Mechanics
 
-- [ ] **Diplomacy** — Relations, alliances, wars, peace deals. AI `ALLY` decisions currently emit but nothing acts on them. Needs `src/mechanics/diplomacy/`, `src/contracts/mechanics/diplomacy.ts`, and diplomacy events in `EventMap`.
-- [ ] **Economy** — Gold income, upkeep costs, trade routes. Buildings produce no economic output yet. Province `baseIncome` exists in the map contract but is unused.
-- [ ] **Population** — Province population growth, manpower pools, unrest. Required for realistic army recruitment limits and economic scaling.
-- [ ] **Events System** — Scripted/random in-game events (e.g. plague, rebellion, discovery) with player choices and consequences. CLAUDE.md lists this as a planned mechanic.
+- [ ] **Population** — Province population growth over time, manpower pools capping army recruitment, unrest from foreign occupation, revolts when unrest exceeds threshold.
+- [ ] **Religion / Culture** — Provinces have religion and culture tags. Same-religion/culture bonuses to loyalty and income; missionaries convert provinces; interfaith relation penalties.
+- [ ] **Trade System** — Trade routes generating income for connected nations; blockadeable by fleets. Distinct from the existing port income modifier. Design TBD.
+- [ ] **Events System** — Scripted/random in-game events (plague, bumper harvest, noble revolt, mercenary offers, golden age) with choices and consequences. Lower priority — implement after core systems are stable.
 
-### Mechanics — Partially Implemented
+### Mechanic Depth
 
-- [ ] **Military — Combat** — Armies can be raised but cannot move or fight. Need movement, battle resolution, and province conquest.
-- [ ] **Military — AI integration** — AI emits `EXPAND` decisions but nothing translates them into army movement or attack orders.
-- [ ] **Navy — Combat & movement** — Fleets can be formed (coastal provinces only) but have no movement, naval combat, or blockade logic.
-- [ ] **Buildings — Effects** — Buildings can be constructed but produce no game effects (no income bonus, no recruitment boost, etc.).
-- [ ] **Technology — Effects** — Technologies can be researched but unlock nothing. Need an effect layer that modifies unit stats, building output, etc.
-- [ ] **AI — Execution** — AI decisions (`EXPAND`, `FORTIFY`, `ALLY`, `ISOLATE`) are scored and emitted but no mechanic acts on them beyond logging.
-- [ ] **Construction — Build queue UI** — The construction queue runs headlessly; there is no UI to inspect or cancel jobs.
+- [ ] **Technology — Effects** — Apply actual bonuses: Agriculture → +20% farm income, Iron-working → army +15 strength, Steel-working → army +30 strength, Trade-routes → +15% port income, Writing → cheaper diplomatic actions, Siege-engineering → halves wall defense for attacker, Cartography → fog-of-war reveal, Bureaucracy → −25% building upkeep.
+- [ ] **Combat Depth** — Army movement between provinces (1 province/turn), multi-turn sieges for fortified provinces, attrition in enemy territory, naval blockades cutting province income, casualties proportional to strength ratio.
+- [ ] **Economy — Upkeep** — Per-turn gold cost for armies and fleets; desertion/disbanding on insufficient gold. Building maintenance costs. Bankruptcy state blocking recruitment and war declaration.
+- [ ] **New Building Types** — Market (trade bonus), University (research speed +30%), Temple (unrest −10), Mine (income on hills/mountains), Road (movement cost −1 to adjacent province), Fortress (wall defense upgrade: +120 instead of +60).
 
 ### UI / UX
 
-- [ ] **Province info panel** — Show full province details on selection: owner, population, buildings, army/fleet presence, income.
-- [ ] **Country overview panel** — Treasury, technology level, army/fleet roster, diplomatic relations.
-- [ ] **Turn / time controls** — Pause, speed controls, turn counter. Currently the game loop runs unchecked at 20 Hz.
-- [ ] **Minimap** — Overview minimap for large-map navigation.
+- [ ] **Minimap** — Corner overview of the full world with pan-position indicator.
+- [ ] **Notifications panel** — Scrollable log of significant events (wars declared, research completed, conquests, revolts).
+- [ ] **Diplomacy screen** — Matrix view of all nation relationships.
+- [ ] **Tech tree visualization** — Dependency graph showing researched vs. available vs. locked technologies.
+- [ ] **Fog of War** — Provinces not adjacent to your territory show last-known owner rather than current state.
+- [ ] **Province info panel** — Full province details on selection: owner, population, buildings, army/fleet presence, income.
 - [ ] **Tooltip system** — Hover tooltips for provinces, units, and buildings.
-- [ ] **Player country selection** — No UI to choose which of the 20 nations the player controls. `ai:player-country-set` event exists but is never emitted from the UI.
 
 ### Engine / Infrastructure
 
-- [ ] **Persistence** — Save/load game state (localStorage or file download/upload).
-- [ ] **Turn resolution order** — Define and enforce a deterministic per-turn processing order across mechanics.
-- [ ] **Win/loss conditions** — No victory conditions defined. Need a game-over mechanic.
-- [ ] **Map editor / world data tooling** — Province layout is hardcoded in `WorldData.ts`. A visual editor or JSON-driven loader would make iteration easier.
+- [ ] **Persistence** — Save/load game state via `localStorage` (serialize full `GameState` to JSON) with autosave every N turns.
 - [ ] **Integration tests** — `tests/integration/` directory exists but contains no tests. Cross-mechanic flows (e.g. AI decision → construction → army raised) need coverage.
+- [ ] **Turn resolution order** — Define and enforce a deterministic per-turn processing order across mechanics.
+
+---
+
+## Deferred / Long-Term
+
+- **Victory Conditions** — No win states planned yet.
+- **Player UI** — No player-controlled nation or build queue UI yet; game is AI-only for now.
+- **Rulers / Leaders** — Per-nation rulers with stats affecting AI behavior; succession and death events. Revisit after population is stable.
+- **Espionage** — Spies, sabotage, gold theft, revolt incitement. Revisit after diplomacy and population are mature.
+- **Map editor / world data tooling** — Province layout is hardcoded in `WorldData.ts`. Low priority until the world design is final.

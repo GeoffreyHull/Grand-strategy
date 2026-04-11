@@ -278,7 +278,10 @@ export function initMapMechanic(
     const country = mapState.countries[decision.countryId]
     if (!country || country.provinceIds.length === 0) return
 
-    // Collect unique neighbouring provinces owned by other countries
+    // Collect unique neighbouring provinces owned by countries at war with the attacker.
+    // Restricting to active-war targets here (rather than filtering after a random pick)
+    // ensures that truces/neutral relations don't waste EXPAND actions — every attempt
+    // that reaches combat resolution is against a legitimate war target.
     const seen = new Set<ProvinceId>()
     const targets: ProvinceId[] = []
     for (const provinceId of country.provinceIds) {
@@ -290,7 +293,11 @@ export function initMapMechanic(
           if (!nbId || seen.has(nbId)) continue
           seen.add(nbId)
           const nbProvince = mapState.provinces[nbId]
-          if (nbProvince && nbProvince.countryId !== decision.countryId) {
+          if (
+            nbProvince &&
+            nbProvince.countryId !== decision.countryId &&
+            activeWars.has(warKey(decision.countryId, nbProvince.countryId))
+          ) {
             targets.push(nbId)
           }
         }
@@ -304,9 +311,6 @@ export function initMapMechanic(
     if (!targetProvince) return
     const oldOwnerId = targetProvince.countryId
     const newOwnerId = decision.countryId
-
-    // Province capture requires an active war — block if no war has been declared.
-    if (!activeWars.has(warKey(newOwnerId, oldOwnerId))) return
 
     // ── Combat resolution ─────────────────────────────────────────────────────
 

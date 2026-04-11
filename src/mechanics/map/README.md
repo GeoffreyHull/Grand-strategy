@@ -24,9 +24,9 @@ Exported from `src/mechanics/map/index.ts`:
 
 | Event name | Payload type | When it fires |
 |---|---|---|
-| `map:province-selected` | `{ provinceId, countryId }` | User clicks or taps a province cell |
+| `map:country-selected` | `{ countryId }` | First click on any province (or click on a province of a different country) |
+| `map:province-selected` | `{ provinceId, countryId }` | Second click on a province whose country is already selected |
 | `map:province-hovered` | `{ provinceId \| null }` | Mouse enters or leaves a province |
-| `map:country-selected` | `{ countryId }` | User clicks any province (fires with province-selected) |
 | `map:ready` | `{ provinceCount, countryCount }` | After `initMapMechanic` completes setup |
 | `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId }` | An AI nation wins a combat and takes a neighbouring province |
 | `map:province-attack-repelled` | `{ provinceId, attackerId, defenderId, attackStrength, defenseStrength }` | An attack fails — defender holds the province |
@@ -36,6 +36,7 @@ Exported from `src/mechanics/map/index.ts`:
 | Event name | Payload type | What the mechanic does with it |
 |---|---|---|
 | `map:province-hovered` | `{ provinceId \| null }` | Updates `hoveredProvinceId` in state; refreshes info panel |
+| `map:country-selected` | `{ countryId }` | Updates `selectedCountryId`, clears `selectedProvinceId` in state; refreshes info panel |
 | `map:province-selected` | `{ provinceId, countryId }` | Updates `selectedProvinceId` in state; refreshes info panel |
 | `ai:decision-made` | `{ decision }` | On `EXPAND`: captures `decision.frame` for combat log turn labelling, then runs combat resolution against a random neighbouring province **owned by a country currently at war with the attacker** (truced/neutral neighbours are excluded from the candidate pool). Attacker uses armies in adjacent provinces + base 50; defender uses armies in target province × terrain multiplier (plains 1.0, hills 1.3, mountains 1.6, forest 1.2, tundra 1.1, desert 0.9) + walls bonus 60 + base 20. Attacker win → `map:province-conquered`; defender win → `map:province-attack-repelled` |
 | `military:army-raised` | `{ armyId, countryId, provinceId }` | Refreshes info panel and leaderboard to show updated army counts |
@@ -58,7 +59,8 @@ interface MapState {
   provinces:   Record<ProvinceId,  Province>   // all 130 provinces
   countries:   Record<CountryId,   Country>    // all 20 nations
   territories: Record<TerritoryId, Territory>  // one entry per hex cell (600 total)
-  selectedProvinceId: ProvinceId | null
+  selectedProvinceId: ProvinceId | null        // set on second click (province mode)
+  selectedCountryId:  CountryId  | null        // set on first click (country mode)
   hoveredProvinceId:  ProvinceId | null
   cellIndex: Record<string, ProvinceId>        // "col,row" → ProvinceId, O(1) lookup
 }
@@ -81,7 +83,8 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 |---|---|---|
 | **Pan** | Left-click drag | Single-finger drag |
 | **Zoom** | Scroll wheel | Pinch-to-zoom (two fingers) |
-| **Select province** | Left-click (no drag) | Tap |
+| **Select country** | Left-click (no drag) on any province | Tap |
+| **Select province** | Left-click (no drag) on a province of the already-selected country | Tap |
 
 - Zoom range: `MIN_ZOOM` (0.3×) to `MAX_ZOOM` (5×).
 - Zoom is always centered on the cursor / pinch midpoint.
@@ -121,6 +124,7 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 ## Design Notes
 
 - **Camera implementation:** `Camera.ts` provides pure math (`zoomToward`, `screenToWorld`). `MapRenderer` applies a single `ctx.setTransform` before drawing all world-space geometry; no per-cell offset math changes were needed. `MapInteraction` converts screen coords to world coords via `screenToWorld` before hex hit-testing.
+- **Two-step selection:** First click on a province selects that country (highlights all its provinces with a subtle white overlay + perimeter border; info panel shows country-level stats). A second click on a province of the already-selected country selects that specific province (shows full country + province info). Clicking a province of a different country resets to country-selection for the new nation. This is implemented by tracking `selectedCountryId` in `MapState`: `MapInteraction` checks whether the clicked province's country matches `selectedCountryId` before deciding which events to emit. `map:country-selected` always fires first (clearing `selectedProvinceId`), then `map:province-selected` fires if applicable (setting `selectedProvinceId`).
 - **Drag vs click disambiguation:** A press is treated as a click only if the pointer moves less than 4px total. This prevents accidental province selection while panning.
 - **Touch gesture restart:** When one finger lifts during a two-finger gesture (pinch → single pan), the interaction seamlessly restarts a single-touch pan from the current position.
 - **Label visibility:** Province labels are shown only when `hexSize × zoom ≥ 22` effective pixels, keeping the map readable at all zoom levels.

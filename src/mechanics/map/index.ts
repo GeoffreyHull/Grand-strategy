@@ -64,6 +64,7 @@ export function buildMapState(): MapState {
     countries,
     territories,
     selectedProvinceId: null,
+    selectedCountryId:  null,
     hoveredProvinceId:  null,
     cellIndex,
   }
@@ -117,13 +118,39 @@ function updateInfoPanel(
   if (!panel) return
 
   const provinceId = map.selectedProvinceId ?? map.hoveredProvinceId
-  if (!provinceId) {
+
+  if (!provinceId && !map.selectedCountryId) {
     panel.className = 'empty'
     panel.innerHTML = '<h2>Select a Province</h2><p style="font-size:11px;color:#6a7a9a;">Click any province to view details.</p>'
     return
   }
 
-  const province = map.provinces[provinceId]
+  // Country-only selection (no specific province selected or hovered)
+  if (!provinceId && map.selectedCountryId) {
+    const country = map.countries[map.selectedCountryId]
+    if (!country) return
+    const countryArmies    = Object.values(military.armies).filter(a => a.countryId === country.id)
+    const countryBuildings = Object.values(buildings.buildings).filter(b => b.countryId === country.id)
+    const countryEconomy   = economy.countries[country.id]
+    const gold = countryEconomy?.gold ?? 0
+    const totalIncome = country.provinceIds.reduce((sum, pid) => {
+      return sum + (economy.provinces[pid]?.currentIncome ?? 0)
+    }, 0)
+    panel.className = ''
+    panel.innerHTML = `
+      <div class="panel-section-label">Nation</div>
+      <h2><span class="country-dot" style="background:${country.color}"></span>${country.name}</h2>
+      <div class="field"><span>Provinces</span><span>${country.provinceIds.length}</span></div>
+      <div class="field"><span>Armies</span><span>${countryArmies.length} (str ${countryArmies.reduce((s, a) => s + a.strength, 0)})</span></div>
+      <div class="field"><span>Buildings</span><span>${countryBuildings.length}</span></div>
+      <div class="field"><span>Gold</span><span>${Math.floor(gold)} &#9775;</span></div>
+      <div class="field"><span>Income</span><span>+${totalIncome.toFixed(1)} / turn</span></div>
+      <p style="font-size:11px;color:#6a7a9a;margin-top:8px">Click a province to select it.</p>
+    `
+    return
+  }
+
+  const province = provinceId ? map.provinces[provinceId] : undefined
   const country  = province ? map.countries[province.countryId] : undefined
   if (!province || !country) return
 
@@ -243,7 +270,16 @@ export function initMapMechanic(
     refreshPanel()
   })
 
-  // React to selection events
+  // React to country selection (first click) — highlights all country provinces, clears province selection
+  eventBus.on('map:country-selected', ({ countryId }) => {
+    stateStore.setState(draft => ({
+      ...draft,
+      map: { ...draft.map, selectedCountryId: countryId, selectedProvinceId: null },
+    }))
+    refreshPanel()
+  })
+
+  // React to province selection (second click on same country) — sets specific province
   eventBus.on('map:province-selected', ({ provinceId }) => {
     stateStore.setState(draft => ({
       ...draft,

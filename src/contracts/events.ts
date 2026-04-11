@@ -14,8 +14,26 @@ export interface EventMap {
   'map:province-hovered':    { provinceId: ProvinceId | null }
   'map:country-selected':    { countryId: CountryId }
   'map:ready':               { provinceCount: number; countryCount: number }
-  'map:province-conquered':       { provinceId: ProvinceId; newOwnerId: CountryId; oldOwnerId: CountryId }
-  'map:province-attack-repelled': { provinceId: ProvinceId; attackerId: CountryId; defenderId: CountryId; attackStrength: number; defenseStrength: number }
+  'map:province-conquered': {
+    provinceId: ProvinceId
+    newOwnerId: CountryId
+    oldOwnerId: CountryId
+    /** Total attacker army strength lost in the battle (from casualties). */
+    attackerStrengthLost: number
+    /** Total defender army strength wiped (all defender armies in the province are destroyed). */
+    defenderStrengthWiped: number
+  }
+  'map:province-attack-repelled': {
+    provinceId: ProvinceId
+    attackerId: CountryId
+    defenderId: CountryId
+    attackStrength: number
+    defenseStrength: number
+    /** Total attacker army strength lost in the battle. */
+    attackerStrengthLost: number
+    /** Total defender army strength lost in the battle. */
+    defenderStrengthLost: number
+  }
 
   // AI mechanic events
   'ai:decision-made':      { decision: AIDecision }
@@ -91,6 +109,10 @@ export interface EventMap {
     readonly ownerId: CountryId
     readonly locationId: ProvinceId
     readonly reason: 'insufficient-gold'
+  }
+  'military:casualties-taken': {
+    /** Per-army strength reductions for a single battle. */
+    readonly casualties: readonly { readonly armyId: ArmyId; readonly strengthLost: number }[]
   }
 
   // Navy mechanic events

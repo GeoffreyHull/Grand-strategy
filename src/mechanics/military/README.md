@@ -23,14 +23,15 @@ Manages armies. Exposes a function to request army construction via the construc
 | `construction:request` | `{ jobId, ownerId, locationId, buildableType: 'army', durationFrames, metadata: {} }` | Immediately after gold is deducted in `requestBuildArmy` |
 | `military:army-build-rejected` | `{ ownerId, locationId, reason: 'insufficient-gold' }` | When `requestBuildArmy` is called but the owner cannot afford the cost |
 | `military:army-raised` | `{ armyId, countryId, provinceId }` | When an army's construction job completes |
-| `military:army-destroyed` | `{ armyId, countryId, provinceId }` | When a province is conquered and the defender's army is removed |
+| `military:army-destroyed` | `{ armyId, countryId, provinceId }` | When a province is conquered and the defender's army is removed, or when an army's strength drops to 0 from casualties |
 
 ## Events Consumed
 
 | Event name | Payload type | What the mechanic does with it |
 |------------|-------------|-------------------------------|
 | `construction:complete` | `{ buildableType, ownerId, locationId, completedFrame, ... }` | If `buildableType === 'army'`: creates an `Army` in state and emits `military:army-raised` |
-| `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId }` | Destroys all armies belonging to `oldOwnerId` stationed in `provinceId`; emits `military:army-destroyed` for each |
+| `map:province-conquered` | `{ provinceId, newOwnerId, oldOwnerId, ... }` | Destroys all armies belonging to `oldOwnerId` stationed in `provinceId`; emits `military:army-destroyed` for each |
+| `military:casualties-taken` | `{ casualties: [{ armyId, strengthLost }] }` | Reduces each listed army's strength by `strengthLost`; armies reduced to ≤ 0 are deleted and `military:army-destroyed` is emitted for each |
 
 ## State Slice
 
@@ -59,4 +60,5 @@ interface Army {
 - `requestBuildArmy` is a standalone exported function (not a closure) so it can be called directly from UI or AI code without importing internal mechanic state.
 - Army destruction on conquest is purely positional: any army belonging to the old owner in the exact conquered province is removed. Armies in adjacent provinces are unaffected.
 - Multiple armies stacked in the same province are all destroyed together.
+- **Casualties:** After every battle the map mechanic emits `military:casualties-taken`. The military mechanic processes each entry: armies that survive retain their reduced strength; armies reduced to 0 are deleted and `military:army-destroyed` fires. Casualty rates are computed by the map mechanic based on battle intensity (how close the fight was). Winner armies lose 12–27%, loser armies lose 28–48% of their strength per battle.
 - Movement and army merging are out of scope for this implementation.

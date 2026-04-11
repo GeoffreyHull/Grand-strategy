@@ -5,7 +5,7 @@ import type { EventBus } from '../../engine/EventBus'
 import type { StateStore } from '../../engine/StateStore'
 import type { EventMap } from '@contracts/events'
 import type { GameState, MapState } from '@contracts/state'
-import type { MilitaryState } from '@contracts/mechanics/military'
+import type { MilitaryState, ArmyId } from '@contracts/mechanics/military'
 import type { BuildingsState } from '@contracts/mechanics/buildings'
 import type { EconomyState } from '@contracts/mechanics/economy'
 import type { Province, Country, Territory, TerritoryId, ProvinceId, CountryId } from '@contracts/mechanics/map'
@@ -392,6 +392,45 @@ export function initMapMechanic(
 
     const attackWon = attackStrength > defenseStrength
 
+    // ── Casualties ────────────────────────────────────────────────────────────
+    // Battle intensity: 1.0 = perfectly even, ~0 = completely one-sided.
+    // Winner loses 12–27% of army strength; loser loses 28–48%.
+    const battleIntensity = Math.min(attackStrength, defenseStrength) / Math.max(attackStrength, defenseStrength)
+    const WINNER_LOSS = 0.12 + 0.15 * battleIntensity
+    const LOSER_LOSS  = 0.28 + 0.20 * battleIntensity
+
+    const attackerLossFraction = attackWon ? WINNER_LOSS : LOSER_LOSS
+    const defenderLossFraction = attackWon ? LOSER_LOSS  : WINNER_LOSS
+
+    const attackerArmies = Object.values(militaryState.armies)
+      .filter(a => a.countryId === newOwnerId && attackerAdjacent.has(a.provinceId))
+    const defenderArmies = Object.values(militaryState.armies)
+      .filter(a => a.countryId === oldOwnerId && a.provinceId === targetId)
+
+    const battleCasualties: { armyId: ArmyId; strengthLost: number }[] = []
+    let attackerStrengthLost = 0
+
+    for (const army of attackerArmies) {
+      const strengthLost = Math.max(1, Math.round(army.strength * attackerLossFraction))
+      attackerStrengthLost += strengthLost
+      battleCasualties.push({ armyId: army.id, strengthLost })
+    }
+
+    // Defender casualties only when their province is NOT conquered — if the attack
+    // wins, all defender armies are wiped by the map:province-conquered handler.
+    let defenderStrengthLost = 0
+    if (!attackWon) {
+      for (const army of defenderArmies) {
+        const strengthLost = Math.max(1, Math.round(army.strength * defenderLossFraction))
+        defenderStrengthLost += strengthLost
+        battleCasualties.push({ armyId: army.id, strengthLost })
+      }
+    }
+
+    if (battleCasualties.length > 0) {
+      eventBus.emit('military:casualties-taken', { casualties: battleCasualties })
+    }
+
     // Record a transient arrow for rendering (expires after ARROW_DISPLAY_MS).
     attackArrows.push({
       fromProvinceIds: [...attackerAdjacent],
@@ -399,6 +438,9 @@ export function initMapMechanic(
       result: attackWon ? 'conquered' : 'repelled',
       createdAt: Date.now(),
     })
+
+    // Total defender army strength wiped on conquest (for the combat log)
+    const defenderStrengthWiped = defenderArmies.reduce((s, a) => s + a.strength, 0)
 
     if (attackWon) {
       stateStore.setState(draft => {
@@ -427,7 +469,7 @@ export function initMapMechanic(
           },
         }
       })
-      eventBus.emit('map:province-conquered', { provinceId: targetId, newOwnerId, oldOwnerId })
+      eventBus.emit('map:province-conquered', { provinceId: targetId, newOwnerId, oldOwnerId, attackerStrengthLost, defenderStrengthWiped })
     } else {
       eventBus.emit('map:province-attack-repelled', {
         provinceId: targetId,
@@ -435,35 +477,51 @@ export function initMapMechanic(
         defenderId: oldOwnerId,
         attackStrength:  Math.round(attackStrength),
         defenseStrength: Math.round(defenseStrength),
+        attackerStrengthLost,
+        defenderStrengthLost,
       })
     }
   })
 
   // Log combat outcomes
-  eventBus.on('map:province-conquered', ({ provinceId, newOwnerId, oldOwnerId }) => {
+  eventBus.on('map:province-conquered', ({ provinceId, newOwnerId, oldOwnerId, attackerStrengthLost, defenderStrengthWiped }) => {
     const { provinces, countries } = stateStore.getSlice('map')
     const province  = provinces[provinceId]
     const attacker  = countries[newOwnerId]
     const defender  = countries[oldOwnerId]
     if (!province || !attacker || !defender) return
+    const parts: string[] = []
+    if (attackerStrengthLost > 0) parts.push(`atk −${attackerStrengthLost}`)
+    if (defenderStrengthWiped > 0) parts.push(`def wiped (−${defenderStrengthWiped})`)
+    const suffix = parts.length > 0 ? ` [${parts.join(', ')}]` : ''
     appendCombatLog(
-      `${attacker.name} captured ${province.name} from ${defender.name}`,
+      `${attacker.name} captured ${province.name} from ${defender.name}${suffix}`,
       'conquered',
       Math.floor(currentDecisionFrame / 60) + 1,
     )
   })
 
-  eventBus.on('map:province-attack-repelled', ({ provinceId, attackerId, defenderId }) => {
+  eventBus.on('map:province-attack-repelled', ({ provinceId, attackerId, defenderId, attackerStrengthLost, defenderStrengthLost }) => {
     const { provinces, countries } = stateStore.getSlice('map')
     const province = provinces[provinceId]
     const attacker = countries[attackerId]
     const defender = countries[defenderId]
     if (!province || !attacker || !defender) return
+    const parts: string[] = []
+    if (attackerStrengthLost > 0) parts.push(`atk −${attackerStrengthLost}`)
+    if (defenderStrengthLost > 0) parts.push(`def −${defenderStrengthLost}`)
+    const suffix = parts.length > 0 ? ` [${parts.join(', ')}]` : ''
     appendCombatLog(
-      `${defender.name} repelled ${attacker.name}'s attack on ${province.name}`,
+      `${defender.name} repelled ${attacker.name}'s attack on ${province.name}${suffix}`,
       'repelled',
       Math.floor(currentDecisionFrame / 60) + 1,
     )
+  })
+
+  // Refresh UI when armies take casualties (strength changes affect leaderboard score)
+  eventBus.on('military:casualties-taken', () => {
+    refreshPanel()
+    refreshLeaderboard()
   })
 
   // Signal ready

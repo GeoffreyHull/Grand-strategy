@@ -1,0 +1,7 @@
+{
+  "baseGrowthRatePerCycle": 0.01,
+  "warGrowthPenalty": 0.5,
+  "farmCapacityBonus": 1000,
+  "cycleFrames": 100,
+  "incomePerThousand": 1
+}

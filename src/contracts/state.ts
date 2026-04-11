@@ -7,6 +7,8 @@ import type { BuildingsState } from './mechanics/buildings'
 import type { TechnologyState } from './mechanics/technology'
 import type { EconomyState } from './mechanics/economy'
 import type { DiplomacyState } from './mechanics/diplomacy'
+import type { PopulationState } from './mechanics/population'
+import type { CultureState } from './mechanics/culture'
 
 export interface MapState {
   readonly provinces:   Readonly<Record<ProvinceId,  Province>>
@@ -30,4 +32,6 @@ export interface GameState {
   readonly technology:   TechnologyState
   readonly economy:      EconomyState
   readonly diplomacy:    DiplomacyState
+  readonly population:   PopulationState
+  readonly culture:      CultureState
 }

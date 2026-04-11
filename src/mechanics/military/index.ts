@@ -117,5 +117,47 @@ export function initMilitaryMechanic(
     }
   })
 
-  return { destroy: () => { constructionSub.unsubscribe(); conquestSub.unsubscribe() } }
+  const casualtiesSub = eventBus.on('military:casualties-taken', ({ casualties }) => {
+    const armies = stateStore.getSlice('military').armies
+    const toDestroy: Army[] = []
+    const toReduce:  { army: Army; newStrength: number }[] = []
+
+    for (const { armyId, strengthLost } of casualties) {
+      const army = armies[armyId]
+      if (!army) continue
+      const newStrength = army.strength - strengthLost
+      if (newStrength <= 0) {
+        toDestroy.push(army)
+      } else {
+        toReduce.push({ army, newStrength })
+      }
+    }
+
+    if (toDestroy.length === 0 && toReduce.length === 0) return
+
+    stateStore.setState(draft => {
+      const next = { ...draft.military.armies }
+      for (const a of toDestroy) delete next[a.id]
+      for (const { army, newStrength } of toReduce) {
+        next[army.id] = { ...army, strength: newStrength }
+      }
+      return { ...draft, military: { armies: next } }
+    })
+
+    for (const a of toDestroy) {
+      eventBus.emit('military:army-destroyed', {
+        armyId:    a.id,
+        countryId: a.countryId,
+        provinceId: a.provinceId,
+      })
+    }
+  })
+
+  return {
+    destroy: () => {
+      constructionSub.unsubscribe()
+      conquestSub.unsubscribe()
+      casualtiesSub.unsubscribe()
+    },
+  }
 }

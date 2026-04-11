@@ -364,8 +364,12 @@ export function initMapMechanic(
       .filter(a => a.countryId === newOwnerId && attackerAdjacent.has(a.provinceId))
       .reduce((sum, a) => sum + a.strength, 0)
 
+    // Morale roll: ±15% on raw army strength (represents leadership, supply, weather, etc.)
+    const attackMorale  = 0.85 + Math.random() * 0.30
+    const defenderMorale = 0.85 + Math.random() * 0.30
+
     const BASE_ATTACK = 50
-    const attackStrength = attackerArmyStrength + BASE_ATTACK + Math.random() * 30
+    const attackStrength = attackerArmyStrength * attackMorale + BASE_ATTACK + Math.random() * 30
 
     // Defender strength: armies in the target province + terrain + walls
     const defenderArmyStrength = Object.values(militaryState.armies)
@@ -383,7 +387,7 @@ export function initMapMechanic(
 
     const BASE_DEFENSE = 20
     const WALLS_BONUS  = 60
-    const defenseStrength = defenderArmyStrength * terrainMod
+    const defenseStrength = defenderArmyStrength * terrainMod * defenderMorale
       + (hasWalls ? WALLS_BONUS : 0)
       + BASE_DEFENSE
       + Math.random() * 30

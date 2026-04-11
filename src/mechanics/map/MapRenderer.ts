@@ -134,7 +134,51 @@ export class MapRenderer {
       }
     }
 
-    // 5. Hover highlight
+    // 5. Country selection highlight (all provinces of selected country, when no province yet selected)
+    if (state.selectedCountryId && !state.selectedProvinceId) {
+      const country = state.countries[state.selectedCountryId]
+      if (country) {
+        // Subtle fill over all provinces of the selected country
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'
+        for (const pid of country.provinceIds) {
+          const cp = state.provinces[pid]
+          if (!cp) continue
+          for (const cell of cp.cells) {
+            const { x, y } = hexToPixel(cell.col, cell.row, cfg.hexSize)
+            const corners = hexCorners(x + cfg.offsetX, y + cfg.offsetY, cfg.hexSize - 1)
+            hexPath(ctx, corners)
+            ctx.fill()
+          }
+        }
+        // Bright border along the country perimeter
+        for (const pid of country.provinceIds) {
+          const cp = state.provinces[pid]
+          if (!cp) continue
+          for (const cell of cp.cells) {
+            const { x, y } = hexToPixel(cell.col, cell.row, cfg.hexSize)
+            const cx = x + cfg.offsetX
+            const cy = y + cfg.offsetY
+            const corners = hexCorners(cx, cy, cfg.hexSize - 1)
+            const neighbors = hexNeighbors(cell.col, cell.row)
+            for (let i = 0; i < 6; i++) {
+              const nb = neighbors[i]
+              const nbProvinceId = state.cellIndex[cellKey(nb.col, nb.row)]
+              const nbProvince = nbProvinceId ? state.provinces[nbProvinceId] : undefined
+              if (!nbProvince || nbProvince.countryId !== state.selectedCountryId) {
+                ctx.beginPath()
+                ctx.moveTo(corners[i][0], corners[i][1])
+                ctx.lineTo(corners[(i + 1) % 6][0], corners[(i + 1) % 6][1])
+                ctx.strokeStyle = 'rgba(255,255,255,0.75)'
+                ctx.lineWidth = 2
+                ctx.stroke()
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 6. Hover highlight
     if (state.hoveredProvinceId) {
       const hp = state.provinces[state.hoveredProvinceId]
       if (hp) {
@@ -148,7 +192,7 @@ export class MapRenderer {
       }
     }
 
-    // 6. Selection highlight
+    // 7. Province selection highlight
     if (state.selectedProvinceId) {
       const sp = state.provinces[state.selectedProvinceId]
       if (sp) {
@@ -191,7 +235,7 @@ export class MapRenderer {
       buildingsByProvince.set(b.provinceId, list)
     }
 
-    // 7. Province labels + building icons (shown when effective pixel size is large enough)
+    // 8. Province labels + building icons (shown when effective pixel size is large enough)
     if (cfg.hexSize * camera.zoom >= 22) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -210,6 +254,7 @@ export class MapRenderer {
 
         const country = countries[province.countryId]
         const isSelected = province.id === state.selectedProvinceId
+          || (!state.selectedProvinceId && province.countryId === state.selectedCountryId)
         const isHovered  = province.id === state.hoveredProvinceId
 
         ctx.fillStyle = isSelected || isHovered ? '#ffffff' : 'rgba(255,255,255,0.7)'
@@ -243,7 +288,7 @@ export class MapRenderer {
       }
     }
 
-    // 8. Attack arrows (world space — drawn above all province content)
+    // 9. Attack arrows (world space — drawn above all province content)
     if (arrows.length > 0) {
       const ARROW_DISPLAY_MS = 4000
       const ARROW_FADE_MS    = 1200

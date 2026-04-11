@@ -137,10 +137,18 @@ export class MapInteraction {
 
     const provinceId = this.resolveProvince(e.offsetX, e.offsetY)
     if (!provinceId) return
-    const province = this.getState().provinces[provinceId]
+    const state = this.getState()
+    const province = state.provinces[provinceId]
     if (!province) return
-    this.eventBus.emit('map:province-selected', { provinceId, countryId: province.countryId })
-    this.eventBus.emit('map:country-selected',  { countryId: province.countryId })
+
+    if (state.selectedCountryId === province.countryId) {
+      // Second click on same country → select the specific province
+      this.eventBus.emit('map:country-selected',  { countryId: province.countryId })
+      this.eventBus.emit('map:province-selected', { provinceId, countryId: province.countryId })
+    } else {
+      // First click or different country → select the country only
+      this.eventBus.emit('map:country-selected', { countryId: province.countryId })
+    }
   }
 
   private readonly onMouseLeave = (): void => {
@@ -240,10 +248,17 @@ export class MapInteraction {
       const screenY = t.clientY - rect.top
       const provinceId = this.resolveProvince(screenX, screenY)
       if (provinceId) {
-        const province = this.getState().provinces[provinceId]
+        const state   = this.getState()
+        const province = state.provinces[provinceId]
         if (province) {
-          this.eventBus.emit('map:province-selected', { provinceId, countryId: province.countryId })
-          this.eventBus.emit('map:country-selected',  { countryId: province.countryId })
+          if (state.selectedCountryId === province.countryId) {
+            // Second tap on same country → select the specific province
+            this.eventBus.emit('map:country-selected',  { countryId: province.countryId })
+            this.eventBus.emit('map:province-selected', { provinceId, countryId: province.countryId })
+          } else {
+            // First tap or different country → select the country only
+            this.eventBus.emit('map:country-selected', { countryId: province.countryId })
+          }
         }
       }
     }

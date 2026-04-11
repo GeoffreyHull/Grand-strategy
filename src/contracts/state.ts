@@ -14,6 +14,7 @@ export interface MapState {
   /** Each hex cell as a Territory, keyed by "col,row" (same format as cellIndex). */
   readonly territories: Readonly<Record<TerritoryId, Territory>>
   readonly selectedProvinceId: ProvinceId | null
+  readonly selectedCountryId:  CountryId  | null
   readonly hoveredProvinceId:  ProvinceId | null
   /** "col,row" → ProvinceId — O(1) cell lookup */
   readonly cellIndex: Readonly<Record<string, ProvinceId>>

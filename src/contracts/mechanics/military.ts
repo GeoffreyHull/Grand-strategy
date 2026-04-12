@@ -7,7 +7,7 @@ export interface Army {
   readonly countryId: CountryId
   readonly provinceId: ProvinceId
   readonly strength: number
-  readonly createdFrame: number
+  readonly createdTurn: number
 }
 
 export interface MilitaryState {

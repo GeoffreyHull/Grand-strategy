@@ -196,11 +196,13 @@ export function initEconomyMechanic(
     })
   })
 
-  // ── Update tick ──────────────────────────────────────────────────────────────
+  // ── Update tick (once per turn) ───────────────────────────────────────────────
+
+  let lastProcessedTurn = -1
 
   function update(ctx: TickContext): void {
-    const { frame } = ctx
-    if (frame === 0 || frame % config.cycleFrames !== 0) return
+    if (ctx.turn === lastProcessedTurn) return
+    lastProcessedTurn = ctx.turn
 
     const { economy, map } = stateStore.getState()
 
@@ -229,7 +231,7 @@ export function initEconomyMechanic(
         eventBus.emit('economy:income-collected', {
           countryId: id as CountryId,
           amount:    income as number,
-          frame,
+          frame:     ctx.frame,
         })
       }
     }

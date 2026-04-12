@@ -9,8 +9,8 @@ export interface ConstructionJob {
   readonly ownerId: CountryId
   readonly locationId: ProvinceId
   readonly buildableType: BuildableType
-  readonly durationFrames: number
-  readonly progressFrames: number
+  readonly durationTurns: number
+  readonly progressTurns: number
   readonly metadata: Readonly<Record<string, unknown>>
 }
 

@@ -7,18 +7,13 @@ import type { CountryId } from '@contracts/mechanics/map'
 import type { DiplomaticRelation, DiplomaticStatus, DiplomacyState } from '@contracts/mechanics/diplomacy'
 import { makeRelationKey, sortedPair, TRUCE_DURATION_TURNS, TRUCE_REQUEST_EXPIRY_TURNS } from './types'
 
-// ── Default frames-per-turn (100 frames ≈ 5 s at 20 Hz) ──────────────────────
-
-export const DEFAULT_FRAMES_PER_TURN = 100
-
 // ── Initial state factory ─────────────────────────────────────────────────────
 
-export function buildDiplomacyState(framesPerTurn = DEFAULT_FRAMES_PER_TURN): DiplomacyState {
+export function buildDiplomacyState(): DiplomacyState {
   return {
     relations: {},
     pendingTruceRequests: {},
     currentTurn: 0,
-    framesPerTurn,
   }
 }
 
@@ -129,7 +124,7 @@ export function initDiplomacy(
   bus: EventBus<EventMap>,
   store: StateStore<GameState>,
 ): DiplomacyMechanic {
-  let framesSinceLastTurn = 0
+  let lastProcessedTurn = -1
 
   // ── declareWar ──────────────────────────────────────────────────────────────
 
@@ -331,16 +326,14 @@ export function initDiplomacy(
 
   // ── update ────────────────────────────────────────────────────────────────────
 
-  function update(_ctx: TickContext): void {
-    const { framesPerTurn } = store.getSlice('diplomacy')
-    framesSinceLastTurn++
-    if (framesSinceLastTurn < framesPerTurn) return
-    framesSinceLastTurn = 0
+  function update(ctx: TickContext): void {
+    if (ctx.turn === lastProcessedTurn) return
+    lastProcessedTurn = ctx.turn
 
-    // Advance the turn counter
+    // Sync the canonical turn counter into state
     store.setState(draft => ({
       ...draft,
-      diplomacy: { ...draft.diplomacy, currentTurn: draft.diplomacy.currentTurn + 1 },
+      diplomacy: { ...draft.diplomacy, currentTurn: ctx.turn },
     }))
 
     const { currentTurn, relations } = store.getSlice('diplomacy')

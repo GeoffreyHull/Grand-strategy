@@ -136,11 +136,13 @@ export function initCultureMechanic(
     }
   })
 
-  // ── Update tick ──────────────────────────────────────────────────────────────
+  // ── Update tick (once per turn) ───────────────────────────────────────────────
+
+  let lastProcessedTurn = -1
 
   function update(ctx: TickContext): void {
-    const { frame } = ctx
-    if (frame === 0 || frame % config.cycleFrames !== 0) return
+    if (ctx.turn === lastProcessedTurn) return
+    lastProcessedTurn = ctx.turn
 
     const { culture, map } = stateStore.getState()
 
@@ -161,7 +163,7 @@ export function initCultureMechanic(
       if (!ownerCulture || pCulture.cultureId === ownerCulture) continue
 
       // Province is under foreign culture — advance assimilation
-      const newProgress = pCulture.assimilationProgress + config.assimilationRatePerCycle
+      const newProgress = pCulture.assimilationProgress + config.assimilationRatePerTurn
       const converts    = newProgress >= config.assimilationThreshold
 
       changes.push({

@@ -290,6 +290,7 @@ function makeTestState(): MapState {
     },
     cellIndex: { '0,0': provinceId },
     selectedProvinceId: null,
+    selectedCountryId:  countryId,
     hoveredProvinceId:  null,
   }
 }

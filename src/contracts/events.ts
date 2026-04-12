@@ -46,7 +46,7 @@ export interface EventMap {
     readonly ownerId: CountryId
     readonly locationId: ProvinceId
     readonly buildableType: BuildableType
-    readonly durationFrames: number
+    readonly durationTurns: number
     readonly metadata: Readonly<Record<string, unknown>>
   }
   'construction:enqueued': {
@@ -63,7 +63,7 @@ export interface EventMap {
     readonly ownerId: CountryId
     readonly locationId: ProvinceId
     readonly buildableType: BuildableType
-    readonly completedFrame: number
+    readonly completedTurn: number
     readonly metadata: Readonly<Record<string, unknown>>
   }
 

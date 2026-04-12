@@ -17,7 +17,7 @@ export interface ResearchedTechnology {
   readonly countryId: CountryId
   readonly provinceId: ProvinceId
   readonly technologyType: TechnologyType
-  readonly completedFrame: number
+  readonly completedTurn: number
 }
 
 export interface TechnologyState {

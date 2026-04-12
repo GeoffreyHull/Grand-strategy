@@ -89,7 +89,7 @@ function makeBuilding(
     provinceId:     provinceId as ProvinceId,
     ...(territoryId !== undefined ? { territoryId } : {}),
     buildingType,
-    completedFrame: 1,
+    completedTurn: 1,
     scope,
   }
 }
@@ -119,18 +119,18 @@ describe('requestBuildBuilding — event payload', () => {
     ['barracks', 90],
     ['port', 120],
     ['walls', 90],
-  ])('emits correct durationFrames for %s (%i)', (buildingType, expected) => {
+  ])('emits correct durationTurns for %s (%i)', (buildingType, expected) => {
     const bus   = makeMockEventBus()
     const store = makeStateStore(makeProvince(locationId, 'plains', true))
     requestBuildBuilding(bus, store, ownerId, locationId, buildingType)
-    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: expected }))
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationTurns: expected }))
   })
 
-  it('emits correct durationFrames for farm (territory-scoped)', () => {
+  it('emits correct durationTurns for farm (territory-scoped)', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore(makeProvince(locationId, 'plains', true))
     requestBuildBuilding(bus, store, ownerId, locationId, 'farm', DEFAULT_BUILDINGS_CONFIG, '3,4' as TerritoryId)
-    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: 60 }))
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationTurns: 60 }))
   })
 
   it('includes buildingType in metadata', () => {
@@ -291,7 +291,7 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 5, metadata: {},
+      buildableType: 'army', completedTurn: 5, metadata: {},
     })
     expect(store.setState).not.toHaveBeenCalled()
   })
@@ -302,7 +302,7 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 5, metadata: { buildingType: 'castle' },
+      buildableType: 'building', completedTurn: 5, metadata: { buildingType: 'castle' },
     })
     expect(store.setState).not.toHaveBeenCalled()
   })
@@ -320,7 +320,7 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     if (buildingType === 'farm') metadata['territoryId'] = '3,4'
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 5, metadata,
+      buildableType: 'building', completedTurn: 5, metadata,
     })
     const b = Object.values(store.getSlice('buildings').buildings)[0]
     expect(b).toBeDefined()
@@ -334,7 +334,7 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 5, metadata: { buildingType: 'farm', territoryId: '3,4' },
+      buildableType: 'building', completedTurn: 5, metadata: { buildingType: 'farm', territoryId: '3,4' },
     })
     expect(bus.emit).toHaveBeenCalledWith('buildings:building-constructed', expect.objectContaining({
       countryId: ownerId, provinceId: locationId, buildingType: 'farm',
@@ -342,16 +342,16 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     }))
   })
 
-  it('Building.completedFrame matches completedFrame from the event', () => {
+  it('Building.completedTurn matches completedTurn from the event', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore()
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 55, metadata: { buildingType: 'walls' },
+      buildableType: 'building', completedTurn: 55, metadata: { buildingType: 'walls' },
     })
     const b = Object.values(store.getSlice('buildings').buildings)[0]
-    expect(b.completedFrame).toBe(55)
+    expect(b.completedTurn).toBe(55)
   })
 
   it('multiple buildings can coexist in state', () => {
@@ -360,11 +360,11 @@ describe('initBuildingsMechanic — construction:complete handler', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'barracks' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'barracks' },
     })
     bus.emit('construction:complete', {
       jobId: 'j2' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 2, metadata: { buildingType: 'farm' },
+      buildableType: 'building', completedTurn: 2, metadata: { buildingType: 'farm' },
     })
     expect(Object.keys(store.getSlice('buildings').buildings)).toHaveLength(2)
   })
@@ -379,7 +379,7 @@ describe('initBuildingsMechanic — economy:province-modifier-added', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'farm' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'farm' },
     })
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
     const modEvent = calls.find((c: unknown[]) => c[0] === 'economy:province-modifier-added')
@@ -400,7 +400,7 @@ describe('initBuildingsMechanic — economy:province-modifier-added', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'port' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'port' },
     })
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
     expect(calls.some((c: unknown[]) => c[0] === 'economy:province-modifier-added')).toBe(true)
@@ -412,7 +412,7 @@ describe('initBuildingsMechanic — economy:province-modifier-added', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'barracks' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'barracks' },
     })
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
     expect(calls.some((c: unknown[]) => c[0] === 'economy:province-modifier-added')).toBe(false)
@@ -424,7 +424,7 @@ describe('initBuildingsMechanic — economy:province-modifier-added', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'walls' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'walls' },
     })
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
     expect(calls.some((c: unknown[]) => c[0] === 'economy:province-modifier-added')).toBe(false)
@@ -436,7 +436,7 @@ describe('initBuildingsMechanic — economy:province-modifier-added', () => {
     initBuildingsMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'farm' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'farm' },
     })
     const building = Object.values(store.getSlice('buildings').buildings)[0]
     const calls = (bus.emit as ReturnType<typeof vi.fn>).mock.calls
@@ -455,7 +455,7 @@ describe('initBuildingsMechanic — destroy', () => {
     destroy()
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'building', completedFrame: 1, metadata: { buildingType: 'barracks' },
+      buildableType: 'building', completedTurn: 1, metadata: { buildingType: 'barracks' },
     })
     expect(store.setState).not.toHaveBeenCalled()
   })

@@ -117,11 +117,13 @@ export function initPopulationMechanic(
     })
   })
 
-  // ── Update tick ──────────────────────────────────────────────────────────────
+  // ── Update tick (once per turn) ───────────────────────────────────────────────
+
+  let lastProcessedTurn = -1
 
   function update(ctx: TickContext): void {
-    const { frame } = ctx
-    if (frame === 0 || frame % config.cycleFrames !== 0) return
+    if (ctx.turn === lastProcessedTurn) return
+    lastProcessedTurn = ctx.turn
 
     const { population, diplomacy } = stateStore.getState()
 
@@ -150,7 +152,7 @@ export function initPopulationMechanic(
 
       const isAtWar = countriesAtWar.has(pop.countryId)
       const headroom = Math.max(0, 1 - pop.count / pop.capacity)
-      let growthRate = config.baseGrowthRatePerCycle * headroom
+      let growthRate = config.baseGrowthRatePerTurn * headroom
       if (isAtWar) growthRate *= config.warGrowthPenalty
 
       const rawGrowth      = pop.count * growthRate

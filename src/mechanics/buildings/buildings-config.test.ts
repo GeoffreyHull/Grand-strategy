@@ -13,18 +13,18 @@ const VALID_LIMITS = {
 
 const VALID: unknown = {
   buildings: {
-    barracks: { durationFrames: 90,  goldCost: 50, incomeBonus: 0  },
-    port:     { durationFrames: 120, goldCost: 75, incomeBonus: 15 },
-    farm:     { durationFrames: 60,  goldCost: 30, incomeBonus: 10 },
-    walls:    { durationFrames: 90,  goldCost: 60, incomeBonus: 0  },
+    barracks: { durationTurns: 90,  goldCost: 50, incomeBonus: 0  },
+    port:     { durationTurns: 120, goldCost: 75, incomeBonus: 15 },
+    farm:     { durationTurns: 60,  goldCost: 30, incomeBonus: 10 },
+    walls:    { durationTurns: 90,  goldCost: 60, incomeBonus: 0  },
   },
   limits: VALID_LIMITS,
 }
 
 describe('DEFAULT_BUILDINGS_CONFIG', () => {
-  it('has a positive durationFrames for each building type', () => {
+  it('has a positive durationTurns for each building type', () => {
     for (const entry of Object.values(DEFAULT_BUILDINGS_CONFIG.buildings)) {
-      expect(entry.durationFrames).toBeGreaterThan(0)
+      expect(entry.durationTurns).toBeGreaterThan(0)
     }
   })
 
@@ -56,8 +56,8 @@ describe('DEFAULT_BUILDINGS_CONFIG', () => {
 describe('validateBuildingsConfig', () => {
   it('returns a typed config for valid input', () => {
     const result = validateBuildingsConfig(VALID)
-    expect(result.buildings.barracks.durationFrames).toBe(90)
-    expect(result.buildings.port.durationFrames).toBe(120)
+    expect(result.buildings.barracks.durationTurns).toBe(90)
+    expect(result.buildings.port.durationTurns).toBe(120)
     expect(result.buildings.barracks.goldCost).toBe(50)
     expect(result.buildings.port.goldCost).toBe(75)
     expect(result.buildings.farm.incomeBonus).toBe(10)
@@ -77,37 +77,37 @@ describe('validateBuildingsConfig', () => {
   })
 
   it('throws when a known building type key is missing', () => {
-    const missing = { buildings: { barracks: { durationFrames: 90, goldCost: 50, incomeBonus: 0 }, port: { durationFrames: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 } }, limits: VALID_LIMITS }
+    const missing = { buildings: { barracks: { durationTurns: 90, goldCost: 50, incomeBonus: 0 }, port: { durationTurns: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 } }, limits: VALID_LIMITS }
     expect(() => validateBuildingsConfig(missing)).toThrow('buildings.buildings.walls')
   })
 
   it('throws when a building entry is not an object', () => {
-    const bad = { buildings: { barracks: 90, port: { durationFrames: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationFrames: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
+    const bad = { buildings: { barracks: 90, port: { durationTurns: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationTurns: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
     expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.barracks must be an object')
   })
 
-  it('throws when durationFrames is zero', () => {
-    const bad = { buildings: { barracks: { durationFrames: 0, goldCost: 50, incomeBonus: 0 }, port: { durationFrames: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationFrames: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
-    expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.barracks.durationFrames')
+  it('throws when durationTurns is zero', () => {
+    const bad = { buildings: { barracks: { durationTurns: 0, goldCost: 50, incomeBonus: 0 }, port: { durationTurns: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationTurns: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
+    expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.barracks.durationTurns')
   })
 
-  it('throws when durationFrames is negative', () => {
-    const bad = { buildings: { barracks: { durationFrames: 90, goldCost: 50, incomeBonus: 0 }, port: { durationFrames: -1, goldCost: 75, incomeBonus: 15 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationFrames: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
-    expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.port.durationFrames')
+  it('throws when durationTurns is negative', () => {
+    const bad = { buildings: { barracks: { durationTurns: 90, goldCost: 50, incomeBonus: 0 }, port: { durationTurns: -1, goldCost: 75, incomeBonus: 15 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationTurns: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
+    expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.port.durationTurns')
   })
 
   it('throws when goldCost is negative', () => {
-    const bad = { buildings: { barracks: { durationFrames: 90, goldCost: -1, incomeBonus: 0 }, port: { durationFrames: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationFrames: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
+    const bad = { buildings: { barracks: { durationTurns: 90, goldCost: -1, incomeBonus: 0 }, port: { durationTurns: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationTurns: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
     expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.barracks.goldCost')
   })
 
   it('throws when goldCost is missing', () => {
-    const bad = { buildings: { barracks: { durationFrames: 90, incomeBonus: 0 }, port: { durationFrames: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationFrames: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
+    const bad = { buildings: { barracks: { durationTurns: 90, incomeBonus: 0 }, port: { durationTurns: 120, goldCost: 75, incomeBonus: 15 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationTurns: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
     expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.barracks.goldCost')
   })
 
   it('throws when incomeBonus is negative', () => {
-    const bad = { buildings: { barracks: { durationFrames: 90, goldCost: 50, incomeBonus: 0 }, port: { durationFrames: 120, goldCost: 75, incomeBonus: -1 }, farm: { durationFrames: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationFrames: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
+    const bad = { buildings: { barracks: { durationTurns: 90, goldCost: 50, incomeBonus: 0 }, port: { durationTurns: 120, goldCost: 75, incomeBonus: -1 }, farm: { durationTurns: 60, goldCost: 30, incomeBonus: 10 }, walls: { durationTurns: 90, goldCost: 60, incomeBonus: 0 } }, limits: VALID_LIMITS }
     expect(() => validateBuildingsConfig(bad)).toThrow('buildings.buildings.port.incomeBonus')
   })
 
@@ -125,11 +125,11 @@ describe('validateBuildingsConfig', () => {
 
   it('accepts custom durations and bonuses', () => {
     const custom = {
-      buildings: { barracks: { durationFrames: 1, goldCost: 0, incomeBonus: 0 }, port: { durationFrames: 999, goldCost: 100, incomeBonus: 20 }, farm: { durationFrames: 5, goldCost: 10, incomeBonus: 5 }, walls: { durationFrames: 200, goldCost: 40, incomeBonus: 0 } },
+      buildings: { barracks: { durationTurns: 1, goldCost: 0, incomeBonus: 0 }, port: { durationTurns: 999, goldCost: 100, incomeBonus: 20 }, farm: { durationTurns: 5, goldCost: 10, incomeBonus: 5 }, walls: { durationTurns: 200, goldCost: 40, incomeBonus: 0 } },
       limits: VALID_LIMITS,
     }
     const result = validateBuildingsConfig(custom)
-    expect(result.buildings.port.durationFrames).toBe(999)
+    expect(result.buildings.port.durationTurns).toBe(999)
     expect(result.buildings.port.goldCost).toBe(100)
     expect(result.buildings.port.incomeBonus).toBe(20)
   })

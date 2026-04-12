@@ -7,7 +7,7 @@ export interface Fleet {
   readonly countryId: CountryId
   readonly provinceId: ProvinceId
   readonly ships: number
-  readonly createdFrame: number
+  readonly createdTurn: number
 }
 
 export interface NavyState {

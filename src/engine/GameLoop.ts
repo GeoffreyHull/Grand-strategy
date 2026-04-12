@@ -1,7 +1,18 @@
+/**
+ * Number of engine frames that constitute one game turn.
+ * At 20 Hz this equals 15 seconds of real time.
+ * All construction durations, mechanic cycles, and player-visible timing
+ * are expressed in turns — frames are an internal engine detail only.
+ */
+export const FRAMES_PER_TURN = 300
+
 export interface TickContext {
   deltaMs: number
   totalMs: number
+  /** Internal frame counter — prefer `turn` for game logic. */
   frame: number
+  /** Current game turn: Math.floor(frame / FRAMES_PER_TURN). Increments every 300 frames. */
+  turn: number
 }
 
 export type UpdateFn = (ctx: TickContext) => void
@@ -53,7 +64,8 @@ export class GameLoop {
       const ctx: TickContext = {
         deltaMs: this.updateIntervalMs,
         totalMs: this.totalMs,
-        frame: this.frame,
+        frame:   this.frame,
+        turn:    Math.floor(this.frame / FRAMES_PER_TURN),
       }
       for (const fn of this.updateSystems) fn(ctx)
       this.accumulator -= this.updateIntervalMs

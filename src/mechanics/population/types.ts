@@ -6,16 +6,14 @@ export interface PopulationConfig {
   /** Maximum sustainable population per terrain type (base capacity). */
   readonly capacityByTerrain: Readonly<Record<TerrainType | string, number>>
   /**
-   * Logistic growth rate per cycle — fraction of remaining headroom added.
-   * e.g. 0.01 = 1% of (capacity - count) added each cycle.
+   * Logistic growth rate per turn — fraction of remaining headroom added.
+   * e.g. 0.01 = 1% of (capacity - count) added each turn.
    */
-  readonly baseGrowthRatePerCycle: number
+  readonly baseGrowthRatePerTurn: number
   /** Multiplier applied to growth while the owning country is at war. Range 0–1. */
   readonly warGrowthPenalty: number
   /** Capacity bonus added per farm building in the province. */
   readonly farmCapacityBonus: number
-  /** Game frames between population growth ticks. */
-  readonly cycleFrames: number
   /** Flat income bonus added per 1,000 population in a province. */
   readonly incomePerThousand: number
 }
@@ -39,10 +37,9 @@ export const DEFAULT_POPULATION_CONFIG: PopulationConfig = {
     tundra: 1000,
     ocean: 0,
   },
-  baseGrowthRatePerCycle: 0.01,
+  baseGrowthRatePerTurn: 0.01,
   warGrowthPenalty: 0.5,
   farmCapacityBonus: 1000,
-  cycleFrames: 100,
   incomePerThousand: 1,
 }
 
@@ -53,14 +50,12 @@ export function validatePopulationConfig(raw: unknown): PopulationConfig {
   const obj = raw as Record<string, unknown>
   return {
     ...DEFAULT_POPULATION_CONFIG,
-    ...(typeof obj['baseGrowthRatePerCycle'] === 'number'
-      ? { baseGrowthRatePerCycle: obj['baseGrowthRatePerCycle'] } : {}),
+    ...(typeof obj['baseGrowthRatePerTurn'] === 'number'
+      ? { baseGrowthRatePerTurn: obj['baseGrowthRatePerTurn'] } : {}),
     ...(typeof obj['warGrowthPenalty'] === 'number'
       ? { warGrowthPenalty: obj['warGrowthPenalty'] } : {}),
     ...(typeof obj['farmCapacityBonus'] === 'number'
       ? { farmCapacityBonus: obj['farmCapacityBonus'] } : {}),
-    ...(typeof obj['cycleFrames'] === 'number'
-      ? { cycleFrames: obj['cycleFrames'] } : {}),
     ...(typeof obj['incomePerThousand'] === 'number'
       ? { incomePerThousand: obj['incomePerThousand'] } : {}),
   }

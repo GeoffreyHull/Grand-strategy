@@ -20,16 +20,13 @@ function assertNonNegativeFiniteNumber(value: unknown, path: string): asserts va
 }
 
 export interface EconomyConfig {
-  /** How many frames between income ticks (default 60 = 3 s at 20 Hz) */
-  readonly cycleFrames: number
   /** Starting gold for every country */
   readonly startingGold: number
-  /** Base income per terrain type per income cycle */
+  /** Base income per terrain type per turn */
   readonly terrainIncome: Readonly<Record<string, number>>
 }
 
 export const DEFAULT_ECONOMY_CONFIG: EconomyConfig = {
-  cycleFrames:   60,
   startingGold:  50,
   terrainIncome: {
     plains:    5,
@@ -45,7 +42,6 @@ export const DEFAULT_ECONOMY_CONFIG: EconomyConfig = {
 export function validateEconomyConfig(raw: unknown): EconomyConfig {
   if (!isRecord(raw)) throw new Error('economy config must be an object')
 
-  assertPositiveFiniteNumber(raw['cycleFrames'],   'economy.cycleFrames')
   assertNonNegativeFiniteNumber(raw['startingGold'], 'economy.startingGold')
 
   const ti = raw['terrainIncome']
@@ -57,7 +53,6 @@ export function validateEconomyConfig(raw: unknown): EconomyConfig {
   }
 
   return {
-    cycleFrames:   raw['cycleFrames']   as number,
     startingGold:  raw['startingGold']  as number,
     terrainIncome,
   }

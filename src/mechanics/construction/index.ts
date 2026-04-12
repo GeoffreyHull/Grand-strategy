@@ -27,13 +27,13 @@ export function initConstructionMechanic(
     }
 
     const job: ConstructionJob = {
-      jobId:          payload.jobId,
-      ownerId:        payload.ownerId,
-      locationId:     payload.locationId,
-      buildableType:  payload.buildableType,
-      durationFrames: payload.durationFrames,
-      progressFrames: 0,
-      metadata:       payload.metadata,
+      jobId:         payload.jobId,
+      ownerId:       payload.ownerId,
+      locationId:    payload.locationId,
+      buildableType: payload.buildableType,
+      durationTurns: payload.durationTurns,
+      progressTurns: 0,
+      metadata:      payload.metadata,
     }
 
     stateStore.setState(draft => ({
@@ -48,7 +48,13 @@ export function initConstructionMechanic(
     })
   })
 
+  let lastProcessedTurn = -1
+
   function update(ctx: TickContext): void {
+    // Advance construction progress once per turn
+    if (ctx.turn === lastProcessedTurn) return
+    lastProcessedTurn = ctx.turn
+
     const { jobs } = stateStore.getSlice('construction')
     const entries = Object.entries(jobs) as [JobId, ConstructionJob][]
     if (entries.length === 0) return
@@ -57,11 +63,11 @@ export function initConstructionMechanic(
     const completed: ConstructionJob[] = []
 
     for (const [jobId, job] of entries) {
-      const next = job.progressFrames + 1
-      if (next >= job.durationFrames) {
+      const next = job.progressTurns + 1
+      if (next >= job.durationTurns) {
         completed.push(job)
       } else {
-        nextJobs[jobId] = { ...job, progressFrames: next }
+        nextJobs[jobId] = { ...job, progressTurns: next }
       }
     }
 
@@ -72,12 +78,12 @@ export function initConstructionMechanic(
 
     for (const job of completed) {
       eventBus.emit('construction:complete', {
-        jobId:          job.jobId,
-        ownerId:        job.ownerId,
-        locationId:     job.locationId,
-        buildableType:  job.buildableType,
-        completedFrame: ctx.frame,
-        metadata:       job.metadata,
+        jobId:         job.jobId,
+        ownerId:       job.ownerId,
+        locationId:    job.locationId,
+        buildableType: job.buildableType,
+        completedTurn: ctx.turn,
+        metadata:      job.metadata,
       })
     }
   }

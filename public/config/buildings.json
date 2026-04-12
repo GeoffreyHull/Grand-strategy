@@ -1,9 +1,9 @@
 {
   "buildings": {
-    "barracks": { "durationFrames": 90,  "goldCost": 50, "incomeBonus": 0  },
-    "port":     { "durationFrames": 120, "goldCost": 75, "incomeBonus": 15 },
-    "farm":     { "durationFrames": 60,  "goldCost": 30, "incomeBonus": 10 },
-    "walls":    { "durationFrames": 90,  "goldCost": 60, "incomeBonus": 0  }
+    "barracks": { "durationTurns": 1, "goldCost": 50, "incomeBonus": 0  },
+    "port":     { "durationTurns": 2, "goldCost": 75, "incomeBonus": 15 },
+    "farm":     { "durationTurns": 1, "goldCost": 30, "incomeBonus": 10 },
+    "walls":    { "durationTurns": 1, "goldCost": 60, "incomeBonus": 0  }
   },
   "limits": {
     "plains":    { "farm": 20, "port": 3, "barracks": 3, "walls": 2 },

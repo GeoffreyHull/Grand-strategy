@@ -26,7 +26,7 @@ function assertPositiveFiniteNumber(value: unknown, path: string): asserts value
 }
 
 export interface TechnologyTypeConfig {
-  readonly durationFrames: number
+  readonly durationTurns: number
 }
 
 export interface TechnologyConfig {
@@ -35,14 +35,14 @@ export interface TechnologyConfig {
 
 export const DEFAULT_TECHNOLOGY_CONFIG: TechnologyConfig = {
   technologies: {
-    'agriculture':       { durationFrames: 60  },
-    'iron-working':      { durationFrames: 90  },
-    'steel-working':     { durationFrames: 120 },
-    'trade-routes':      { durationFrames: 80  },
-    'writing':           { durationFrames: 70  },
-    'siege-engineering': { durationFrames: 100 },
-    'cartography':       { durationFrames: 80  },
-    'bureaucracy':       { durationFrames: 90  },
+    'agriculture':       { durationTurns: 60  },
+    'iron-working':      { durationTurns: 90  },
+    'steel-working':     { durationTurns: 120 },
+    'trade-routes':      { durationTurns: 80  },
+    'writing':           { durationTurns: 70  },
+    'siege-engineering': { durationTurns: 100 },
+    'cartography':       { durationTurns: 80  },
+    'bureaucracy':       { durationTurns: 90  },
   },
 }
 
@@ -71,8 +71,8 @@ export function validateTechnologyConfig(raw: unknown): TechnologyConfig {
     if (!isRecord(entry)) {
       throw new Error(`technology.technologies.${type} must be an object`)
     }
-    assertPositiveFiniteNumber(entry['durationFrames'], `technology.technologies.${type}.durationFrames`)
-    result[type] = { durationFrames: entry['durationFrames'] as number }
+    assertPositiveFiniteNumber(entry['durationTurns'], `technology.technologies.${type}.durationTurns`)
+    result[type] = { durationTurns: entry['durationTurns'] as number }
   }
   return { technologies: result as Record<TechnologyType, TechnologyTypeConfig> }
 }

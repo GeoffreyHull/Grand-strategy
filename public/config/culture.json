@@ -1,6 +1,5 @@
 {
-  "assimilationRatePerCycle": 5,
+  "assimilationRatePerTurn": 5,
   "assimilationThreshold": 100,
-  "cultureMismatchModifier": 0.9,
-  "cycleFrames": 200
+  "cultureMismatchModifier": 0.9
 }

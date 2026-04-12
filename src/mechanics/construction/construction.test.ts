@@ -42,8 +42,8 @@ function makeStateStore(initial: Partial<GameState> = {}) {
   } as unknown as StateStore<GameState>
 }
 
-function makeCtx(frame = 1): TickContext {
-  return { frame, deltaMs: 50, totalMs: frame * 50 }
+function makeCtx(turn: number): TickContext {
+  return { turn, frame: turn * 300, deltaMs: 50, totalMs: turn * 300 * 50 }
 }
 
 const jobId1 = 'job-1' as JobId
@@ -65,14 +65,14 @@ describe('initConstructionMechanic — construction:request handler', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 10, metadata: {},
+      buildableType: 'army', durationTurns: 10, metadata: {},
     })
 
     expect(store.setState).toHaveBeenCalledOnce()
     const updater = (store.setState as ReturnType<typeof vi.fn>).mock.calls[0][0]
     const next = updater({ construction: buildConstructionState() } as GameState)
     expect(next.construction.jobs[jobId1]).toBeDefined()
-    expect(next.construction.jobs[jobId1].progressFrames).toBe(0)
+    expect(next.construction.jobs[jobId1].progressTurns).toBe(0)
   })
 
   it('emits construction:enqueued after adding a job', () => {
@@ -82,7 +82,7 @@ describe('initConstructionMechanic — construction:request handler', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 10, metadata: {},
+      buildableType: 'army', durationTurns: 10, metadata: {},
     })
 
     expect(bus.emit).toHaveBeenCalledWith('construction:enqueued', expect.objectContaining({ jobId: jobId1 }))
@@ -95,11 +95,11 @@ describe('initConstructionMechanic — construction:request handler', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 10, metadata: {},
+      buildableType: 'army', durationTurns: 10, metadata: {},
     })
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 10, metadata: {},
+      buildableType: 'army', durationTurns: 10, metadata: {},
     })
 
     expect(bus.emit).toHaveBeenCalledWith('construction:cancelled', expect.objectContaining({ jobId: jobId1, reason: 'duplicate-job-id' }))
@@ -112,13 +112,13 @@ describe('initConstructionMechanic — construction:request handler', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 10, metadata: {},
+      buildableType: 'army', durationTurns: 10, metadata: {},
     })
     const callsBefore = (store.setState as ReturnType<typeof vi.fn>).mock.calls.length
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 10, metadata: {},
+      buildableType: 'army', durationTurns: 10, metadata: {},
     })
 
     expect((store.setState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore)
@@ -126,28 +126,28 @@ describe('initConstructionMechanic — construction:request handler', () => {
 })
 
 describe('initConstructionMechanic — update tick', () => {
-  it('increments progressFrames each tick', () => {
+  it('increments progressTurns each tick', () => {
     const bus = makeMockEventBus()
     const store = makeStateStore()
     const { update } = initConstructionMechanic(bus, store)
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 5, metadata: {},
+      buildableType: 'army', durationTurns: 5, metadata: {},
     })
 
     update(makeCtx(1))
-    expect(store.getSlice('construction').jobs[jobId1].progressFrames).toBe(1)
+    expect(store.getSlice('construction').jobs[jobId1].progressTurns).toBe(1)
   })
 
-  it('does not complete a job before durationFrames ticks', () => {
+  it('does not complete a job before durationTurns ticks', () => {
     const bus = makeMockEventBus()
     const store = makeStateStore()
     const { update } = initConstructionMechanic(bus, store)
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 3, metadata: {},
+      buildableType: 'army', durationTurns: 3, metadata: {},
     })
 
     update(makeCtx(1))
@@ -157,14 +157,14 @@ describe('initConstructionMechanic — update tick', () => {
     expect(bus.emit).not.toHaveBeenCalledWith('construction:complete', expect.anything())
   })
 
-  it('removes a job from state when progressFrames reaches durationFrames', () => {
+  it('removes a job from state when progressTurns reaches durationTurns', () => {
     const bus = makeMockEventBus()
     const store = makeStateStore()
     const { update } = initConstructionMechanic(bus, store)
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 3, metadata: {},
+      buildableType: 'army', durationTurns: 3, metadata: {},
     })
 
     update(makeCtx(1))
@@ -181,7 +181,7 @@ describe('initConstructionMechanic — update tick', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'fleet', durationFrames: 2, metadata: { extra: true },
+      buildableType: 'fleet', durationTurns: 2, metadata: { extra: true },
     })
 
     update(makeCtx(1))
@@ -192,7 +192,7 @@ describe('initConstructionMechanic — update tick', () => {
       buildableType: 'fleet',
       ownerId:       'c1',
       locationId:    'p1',
-      completedFrame: 99,
+      completedTurn: 99,
       metadata:      { extra: true },
     }))
   })
@@ -205,7 +205,7 @@ describe('initConstructionMechanic — update tick', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'building', durationFrames: 1, metadata: meta,
+      buildableType: 'building', durationTurns: 1, metadata: meta,
     })
 
     update(makeCtx(1))
@@ -220,11 +220,11 @@ describe('initConstructionMechanic — update tick', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 2, metadata: {},
+      buildableType: 'army', durationTurns: 2, metadata: {},
     })
     bus.emit('construction:request', {
       jobId: jobId2, ownerId: 'c1' as never, locationId: 'p2' as never,
-      buildableType: 'fleet', durationFrames: 2, metadata: {},
+      buildableType: 'fleet', durationTurns: 2, metadata: {},
     })
 
     update(makeCtx(1))
@@ -246,7 +246,7 @@ describe('initConstructionMechanic — destroy', () => {
 
     bus.emit('construction:request', {
       jobId: jobId1, ownerId: 'c1' as never, locationId: 'p1' as never,
-      buildableType: 'army', durationFrames: 5, metadata: {},
+      buildableType: 'army', durationTurns: 5, metadata: {},
     })
 
     expect(store.setState).not.toHaveBeenCalled()

@@ -71,7 +71,7 @@ function makeMocks(mapOverride?: Partial<GameState['map']>): {
     buildings:    { buildings: {} },
     technology:   { technologies: {}, byCountry: {} },
     economy:      { provinces: {}, countries: {} },
-    diplomacy:    { relations: {}, pendingTruceRequests: {}, currentTurn: 0, framesPerTurn: 20 },
+    diplomacy:    { relations: {}, pendingTruceRequests: {}, currentTurn: 0 },
     population:   buildPopulationState(),
     culture:      buildCultureState(),
   } as unknown as GameState
@@ -249,7 +249,7 @@ describe('initCultureMechanic', () => {
   })
 
   describe('assimilation tick', () => {
-    it('does not tick on frame 0', () => {
+    it('does not process the same turn twice', () => {
       const mechanic = initCultureMechanic(mocks.eventBus, mocks.stateStore, DEFAULT_CULTURE_CONFIG)
       // Conquer pA so there is a mismatch to assimilate
       const conquestHandler = mocks.handlers.get('map:province-conquered')
@@ -272,14 +272,15 @@ describe('initCultureMechanic', () => {
         },
       }))
 
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
       ;(mocks.emit as ReturnType<typeof vi.fn>).mockClear()
-      mechanic.update({ frame: 0, deltaMs: 50, totalMs: 0 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
       const calls = (mocks.emit as ReturnType<typeof vi.fn>).mock.calls
       expect(calls.filter(([e]) => e === 'culture:assimilation-progressed')).toHaveLength(0)
     })
 
-    it('progresses assimilation on cycle frame', () => {
-      const cfg = { ...DEFAULT_CULTURE_CONFIG, cycleFrames: 100, assimilationRatePerCycle: 5 }
+    it('progresses assimilation on a new turn', () => {
+      const cfg = { ...DEFAULT_CULTURE_CONFIG, assimilationRatePerTurn: 5 }
       const mechanic = initCultureMechanic(mocks.eventBus, mocks.stateStore, cfg)
 
       // Conquer pA so there is a mismatch
@@ -303,7 +304,7 @@ describe('initCultureMechanic', () => {
       }))
 
       ;(mocks.emit as ReturnType<typeof vi.fn>).mockClear()
-      mechanic.update({ frame: 100, deltaMs: 50, totalMs: 5000 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
 
       const progress = mocks.stateStore.getSlice('culture').provinces['pA' as ProvinceId]?.assimilationProgress
       expect(progress).toBe(5)
@@ -315,9 +316,8 @@ describe('initCultureMechanic', () => {
     it('converts culture and removes mismatch modifier when threshold reached', () => {
       const cfg = {
         ...DEFAULT_CULTURE_CONFIG,
-        cycleFrames:              1,
-        assimilationRatePerCycle: 100,
-        assimilationThreshold:    100,
+        assimilationRatePerTurn: 100,
+        assimilationThreshold:   100,
       }
       const mechanic = initCultureMechanic(mocks.eventBus, mocks.stateStore, cfg)
 
@@ -341,7 +341,7 @@ describe('initCultureMechanic', () => {
       }))
 
       ;(mocks.emit as ReturnType<typeof vi.fn>).mockClear()
-      mechanic.update({ frame: 1, deltaMs: 50, totalMs: 50 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
 
       // Culture should have converted
       const { culture } = mocks.stateStore.getState()

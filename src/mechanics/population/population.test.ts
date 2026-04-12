@@ -59,7 +59,7 @@ function makeMocks(initialState: Partial<GameState> = {}): {
     buildings:    { buildings: {} },
     technology:   { technologies: {}, byCountry: {} },
     economy:      { provinces: {}, countries: {} },
-    diplomacy:    { relations: {}, pendingTruceRequests: {}, currentTurn: 0, framesPerTurn: 20 },
+    diplomacy:    { relations: {}, pendingTruceRequests: {}, currentTurn: 0 },
     population:   buildPopulationState(),
     culture:      { provinces: {}, countryCultures: {} },
     ...initialState,
@@ -150,44 +150,36 @@ describe('initPopulationMechanic', () => {
   })
 
   describe('update tick', () => {
-    it('does not grow on frame 0', () => {
+    it('does not grow twice for the same turn', () => {
       const mechanic = initPopulationMechanic(mocks.eventBus, mocks.stateStore, DEFAULT_POPULATION_CONFIG)
-      const before = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
-      mechanic.update({ frame: 0, deltaMs: 50, totalMs: 0 })
-      const after  = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
-      expect(after).toBe(before)
-    })
-
-    it('does not grow on non-cycle frames', () => {
-      const cfg = { ...DEFAULT_POPULATION_CONFIG, cycleFrames: 100 }
-      const mechanic = initPopulationMechanic(mocks.eventBus, mocks.stateStore, cfg)
-      const before = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
-      mechanic.update({ frame: 50, deltaMs: 50, totalMs: 2500 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
       const after = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
-      expect(after).toBe(before)
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
+      const afterDuplicate = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
+      expect(afterDuplicate).toBe(after)
     })
 
-    it('grows population on cycle frame', () => {
-      const cfg = { ...DEFAULT_POPULATION_CONFIG, cycleFrames: 100, baseGrowthRatePerCycle: 0.1 }
+    it('grows population on a new turn', () => {
+      const cfg = { ...DEFAULT_POPULATION_CONFIG, baseGrowthRatePerTurn: 0.1 }
       const mechanic = initPopulationMechanic(mocks.eventBus, mocks.stateStore, cfg)
       const before = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
-      mechanic.update({ frame: 100, deltaMs: 50, totalMs: 5000 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
       const after = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
       expect(after).toBeGreaterThan(before)
     })
 
     it('emits population:grown when count increases', () => {
-      const cfg = { ...DEFAULT_POPULATION_CONFIG, cycleFrames: 100, baseGrowthRatePerCycle: 0.5 }
+      const cfg = { ...DEFAULT_POPULATION_CONFIG, baseGrowthRatePerTurn: 0.5 }
       const mechanic = initPopulationMechanic(mocks.eventBus, mocks.stateStore, cfg)
       ;(mocks.emit as ReturnType<typeof vi.fn>).mockClear()
-      mechanic.update({ frame: 100, deltaMs: 50, totalMs: 5000 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
       const calls = (mocks.emit as ReturnType<typeof vi.fn>).mock.calls
       const grownCalls = calls.filter(([e]) => e === 'population:grown')
       expect(grownCalls.length).toBeGreaterThan(0)
     })
 
     it('applies war growth penalty when country is at war', () => {
-      const cfg = { ...DEFAULT_POPULATION_CONFIG, cycleFrames: 100, baseGrowthRatePerCycle: 0.5, warGrowthPenalty: 0 }
+      const cfg = { ...DEFAULT_POPULATION_CONFIG, baseGrowthRatePerTurn: 0.5, warGrowthPenalty: 0 }
       // Put cA at war
       mocks = makeMocks({
         map: {
@@ -205,12 +197,11 @@ describe('initPopulationMechanic', () => {
           } as unknown as GameState['diplomacy']['relations'],
           pendingTruceRequests: {},
           currentTurn: 0,
-          framesPerTurn: 20,
         },
       })
       const mechanic = initPopulationMechanic(mocks.eventBus, mocks.stateStore, cfg)
       const before = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
-      mechanic.update({ frame: 100, deltaMs: 50, totalMs: 5000 })
+      mechanic.update({ turn: 1, frame: 300, deltaMs: 50, totalMs: 15000 })
       const after = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]?.count ?? 0
       // warGrowthPenalty = 0 means zero growth during war
       expect(after).toBe(before)
@@ -219,14 +210,13 @@ describe('initPopulationMechanic', () => {
     it('caps population at capacity', () => {
       const cfg = {
         ...DEFAULT_POPULATION_CONFIG,
-        cycleFrames: 1,
-        baseGrowthRatePerCycle: 100,
+        baseGrowthRatePerTurn: 100,
         initialPopulationByTerrain: { plains: 4999, hills: 0, mountains: 0, forest: 0, desert: 0, tundra: 0, ocean: 0 },
         capacityByTerrain: { plains: 5000, hills: 0, mountains: 0, forest: 0, desert: 0, tundra: 0, ocean: 0 },
       }
       const mechanic = initPopulationMechanic(mocks.eventBus, mocks.stateStore, cfg)
       for (let i = 1; i <= 10; i++) {
-        mechanic.update({ frame: i, deltaMs: 50, totalMs: i * 50 })
+        mechanic.update({ turn: i, frame: i * 300, deltaMs: 50, totalMs: i * 300 * 50 })
       }
       const pop = mocks.stateStore.getSlice('population').provinces['pA' as ProvinceId]
       expect(pop?.count).toBeLessThanOrEqual(pop?.capacity ?? 0)

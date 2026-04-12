@@ -52,12 +52,12 @@ export function requestBuildArmy(
     reason:    'army-recruitment',
   })
   eventBus.emit('construction:request', {
-    jobId:          crypto.randomUUID() as JobId,
+    jobId:         crypto.randomUUID() as JobId,
     ownerId,
     locationId,
-    buildableType:  'army',
-    durationFrames: config.army.durationFrames,
-    metadata:       {},
+    buildableType: 'army',
+    durationTurns: config.army.durationTurns,
+    metadata:      {},
   })
 }
 
@@ -74,11 +74,11 @@ export function initMilitaryMechanic(
       .some(b => b.provinceId === payload.locationId && b.buildingType === 'barracks')
     const strength = config.army.strength + (hasBarracks ? config.army.barracksStrengthBonus : 0)
     const army: Army = {
-      id:           armyId,
-      countryId:    payload.ownerId,
-      provinceId:   payload.locationId,
+      id:          armyId,
+      countryId:   payload.ownerId,
+      provinceId:  payload.locationId,
       strength,
-      createdFrame: payload.completedFrame,
+      createdTurn: payload.completedTurn,
     }
 
     stateStore.setState(draft => ({

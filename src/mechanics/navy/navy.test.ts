@@ -77,11 +77,11 @@ describe('requestBuildFleet', () => {
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ buildableType: 'fleet' }))
   })
 
-  it('emits construction:request with durationFrames 120', () => {
+  it('emits construction:request with durationTurns 120', () => {
     const bus = makeMockEventBus()
     const store = makeStateStore(makeMapState({ [coastalId]: coastalProvince }))
     requestBuildFleet(bus, store, ownerId, coastalId)
-    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: 120 }))
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationTurns: 120 }))
   })
 
   it('emits navy:fleet-rejected with reason not-coastal for an inland province', () => {
@@ -114,7 +114,7 @@ describe('initNavyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId: coastalId,
-      buildableType: 'army', completedFrame: 5, metadata: {},
+      buildableType: 'army', completedTurn: 5, metadata: {},
     })
 
     expect(store.setState).not.toHaveBeenCalled()
@@ -127,7 +127,7 @@ describe('initNavyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId: coastalId,
-      buildableType: 'fleet', completedFrame: 10, metadata: {},
+      buildableType: 'fleet', completedTurn: 10, metadata: {},
     })
 
     const fleets = store.getSlice('navy').fleets
@@ -144,7 +144,7 @@ describe('initNavyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId: coastalId,
-      buildableType: 'fleet', completedFrame: 10, metadata: {},
+      buildableType: 'fleet', completedTurn: 10, metadata: {},
     })
 
     expect(bus.emit).toHaveBeenCalledWith('navy:fleet-formed', expect.objectContaining({
@@ -160,25 +160,25 @@ describe('initNavyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId: coastalId,
-      buildableType: 'fleet', completedFrame: 10, metadata: {},
+      buildableType: 'fleet', completedTurn: 10, metadata: {},
     })
 
     const fleet = Object.values(store.getSlice('navy').fleets)[0]
     expect(fleet.ships).toBeGreaterThan(0)
   })
 
-  it('Fleet.createdFrame matches completedFrame from the event', () => {
+  it('Fleet.createdTurn matches completedTurn from the event', () => {
     const bus = makeMockEventBus()
     const store = makeStateStore()
     initNavyMechanic(bus, store)
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId: coastalId,
-      buildableType: 'fleet', completedFrame: 77, metadata: {},
+      buildableType: 'fleet', completedTurn: 77, metadata: {},
     })
 
     const fleet = Object.values(store.getSlice('navy').fleets)[0]
-    expect(fleet.createdFrame).toBe(77)
+    expect(fleet.createdTurn).toBe(77)
   })
 })
 
@@ -191,7 +191,7 @@ describe('initNavyMechanic — destroy', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId: coastalId,
-      buildableType: 'fleet', completedFrame: 1, metadata: {},
+      buildableType: 'fleet', completedTurn: 1, metadata: {},
     })
 
     expect(store.setState).not.toHaveBeenCalled()

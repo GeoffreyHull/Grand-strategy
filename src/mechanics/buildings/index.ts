@@ -121,7 +121,7 @@ export function requestBuildBuilding(
     ownerId,
     locationId,
     buildableType:  'building',
-    durationFrames: config.buildings[buildingType].durationFrames,
+    durationTurns: config.buildings[buildingType].durationTurns,
     metadata:       scope === 'territory' && territoryId
       ? { buildingType, territoryId }
       : { buildingType },
@@ -153,7 +153,7 @@ export function initBuildingsMechanic(
       provinceId:     payload.locationId,
       ...(territoryId !== undefined ? { territoryId } : {}),
       buildingType:   rawType,
-      completedFrame: payload.completedFrame,
+      completedTurn: payload.completedTurn,
       scope,
     }
 

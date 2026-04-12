@@ -27,6 +27,6 @@ export interface DiplomacyState {
    * At most one pending request per belligerent pair at any time.
    */
   readonly pendingTruceRequests: Readonly<Record<string, PendingTruceRequest>>
+  /** Current game turn — mirrors TickContext.turn, kept in state for query convenience. */
   readonly currentTurn: number
-  readonly framesPerTurn: number
 }

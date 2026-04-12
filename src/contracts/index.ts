@@ -55,5 +55,16 @@ export type {
   DiplomacyState,
 } from './mechanics/diplomacy'
 
+export type {
+  ProvincePopulation,
+  PopulationState,
+} from './mechanics/population'
+
+export type {
+  CultureId,
+  ProvinceCulture,
+  CultureState,
+} from './mechanics/culture'
+
 export type { EventMap } from './events'
 export type { MapState, GameState } from './state'

@@ -1,6 +1,6 @@
 {
   "fleet": {
-    "durationFrames": 120,
+    "durationTurns": 1,
     "ships": 3
   }
 }

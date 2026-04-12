@@ -7,6 +7,7 @@ import type { FleetId } from './mechanics/navy'
 import type { BuildingId, BuildingType, BuildingScope } from './mechanics/buildings'
 import type { TechnologyId, TechnologyType } from './mechanics/technology'
 import type { IncomeModifier } from './mechanics/economy'
+import type { CultureId } from './mechanics/culture'
 
 export interface EventMap {
   // Map mechanic events
@@ -45,7 +46,7 @@ export interface EventMap {
     readonly ownerId: CountryId
     readonly locationId: ProvinceId
     readonly buildableType: BuildableType
-    readonly durationFrames: number
+    readonly durationTurns: number
     readonly metadata: Readonly<Record<string, unknown>>
   }
   'construction:enqueued': {
@@ -62,7 +63,7 @@ export interface EventMap {
     readonly ownerId: CountryId
     readonly locationId: ProvinceId
     readonly buildableType: BuildableType
-    readonly completedFrame: number
+    readonly completedTurn: number
     readonly metadata: Readonly<Record<string, unknown>>
   }
 
@@ -218,5 +219,37 @@ export interface EventMap {
     readonly ownerId: CountryId
     readonly technologyType: TechnologyType
     readonly reason: 'already-researched'
+  }
+
+  // Population mechanic events
+  'population:grown': {
+    readonly provinceId: ProvinceId
+    readonly countryId: CountryId
+    readonly amount: number
+    readonly newCount: number
+  }
+  'population:declined': {
+    readonly provinceId: ProvinceId
+    readonly countryId: CountryId
+    readonly amount: number
+    readonly newCount: number
+  }
+  'population:province-transferred': {
+    readonly provinceId: ProvinceId
+    readonly newCountryId: CountryId
+    readonly oldCountryId: CountryId
+  }
+
+  // Culture mechanic events
+  'culture:province-converted': {
+    readonly provinceId: ProvinceId
+    readonly oldCultureId: CultureId
+    readonly newCultureId: CultureId
+    readonly countryId: CountryId
+  }
+  'culture:assimilation-progressed': {
+    readonly provinceId: ProvinceId
+    readonly progress: number
+    readonly targetCultureId: CultureId
   }
 }

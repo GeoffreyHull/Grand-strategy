@@ -1,0 +1,5 @@
+{
+  "assimilationRatePerTurn": 5,
+  "assimilationThreshold": 100,
+  "cultureMismatchModifier": 0.9
+}

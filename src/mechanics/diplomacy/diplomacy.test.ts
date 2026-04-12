@@ -12,14 +12,18 @@ function id(s: string): CountryId {
   return s as CountryId
 }
 
-function makeStore(framesPerTurn = 100): StateStore<GameState> {
+function makeStore(): StateStore<GameState> {
   return new StateStore({
-    diplomacy: buildDiplomacyState(framesPerTurn),
+    diplomacy: buildDiplomacyState(),
   } as unknown as GameState)
 }
 
 function makeBus(): EventBus<EventMap> {
   return new EventBus<EventMap>()
+}
+
+function makeCtx(turn: number) {
+  return { turn, frame: turn * 300, deltaMs: 50, totalMs: turn * 300 * 50 }
 }
 
 const A = id('country-a')
@@ -34,11 +38,6 @@ describe('buildDiplomacyState', () => {
     const state = buildDiplomacyState()
     expect(state.relations).toEqual({})
     expect(state.currentTurn).toBe(0)
-  })
-
-  it('accepts a custom framesPerTurn', () => {
-    const state = buildDiplomacyState(50)
-    expect(state.framesPerTurn).toBe(50)
   })
 })
 
@@ -356,53 +355,57 @@ describe('canAttack', () => {
 // ── update / truce expiry ─────────────────────────────────────────────────────
 
 describe('update / truce expiry', () => {
-  it('advances currentTurn every framesPerTurn frames', () => {
-    const store = makeStore(3)
+  it('currentTurn mirrors ctx.turn', () => {
+    const store = makeStore()
     const diplomacy = initDiplomacy(makeBus(), store)
-    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
 
-    diplomacy.update(ctx)
-    diplomacy.update(ctx)
+    diplomacy.update(makeCtx(0))
     expect(store.getSlice('diplomacy').currentTurn).toBe(0)
 
-    diplomacy.update(ctx) // 3rd frame — turn advances
+    diplomacy.update(makeCtx(1))
     expect(store.getSlice('diplomacy').currentTurn).toBe(1)
+  })
+
+  it('does not re-process the same turn twice', () => {
+    const store = makeStore()
+    const diplomacy = initDiplomacy(makeBus(), store)
+
+    diplomacy.update(makeCtx(3))
+    diplomacy.update(makeCtx(3)) // same turn — no-op
+    expect(store.getSlice('diplomacy').currentTurn).toBe(3)
   })
 
   it('expires a truce after 5 turns and emits truce-expired', () => {
     const bus = makeBus()
-    const store = makeStore(1) // 1 frame = 1 turn for easy testing
+    const store = makeStore()
     const diplomacy = initDiplomacy(bus, store)
 
     diplomacy.declareWar(A, B)
-    diplomacy.makePeace(A, B) // truce expires at turn 5
+    diplomacy.makePeace(A, B) // truce expires at turn 5 (currentTurn=0, expiry=0+5=5)
 
     const expired = vi.fn()
     bus.on('diplomacy:truce-expired', expired)
 
-    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
-
-    // Advance 4 turns — truce should still hold
-    for (let i = 0; i < 4; i++) diplomacy.update(ctx)
+    // Advance turns 1-4 — truce should still hold
+    for (let t = 1; t <= 4; t++) diplomacy.update(makeCtx(t))
     expect(diplomacy.getRelation(A, B)?.status).toBe('truce')
     expect(expired).not.toHaveBeenCalled()
 
-    // 5th turn — truce expires
-    diplomacy.update(ctx)
+    // Turn 5 — truce expires
+    diplomacy.update(makeCtx(5))
     expect(diplomacy.getRelation(A, B)?.status).toBe('neutral')
     expect(expired).toHaveBeenCalledWith({ countryA: A, countryB: B })
   })
 
   it('allows war to be declared after truce expires', () => {
     const bus = makeBus()
-    const store = makeStore(1)
+    const store = makeStore()
     const diplomacy = initDiplomacy(bus, store)
 
     diplomacy.declareWar(A, B)
     diplomacy.makePeace(A, B)
 
-    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
-    for (let i = 0; i < 5; i++) diplomacy.update(ctx)
+    for (let t = 1; t <= 5; t++) diplomacy.update(makeCtx(t))
 
     const declared = vi.fn()
     bus.on('diplomacy:war-declared', declared)
@@ -562,7 +565,7 @@ describe('respondToTruceRequest', () => {
 describe('pending truce request expiry', () => {
   it('emits truce-rejected and removes the request after TRUCE_REQUEST_EXPIRY_TURNS turns', () => {
     const bus = makeBus()
-    const store = makeStore(1) // 1 frame = 1 turn for easy testing
+    const store = makeStore()
     const diplomacy = initDiplomacy(bus, store)
     diplomacy.declareWar(A, B)
     diplomacy.requestTruce(A, B) // requested at turn 0
@@ -570,23 +573,21 @@ describe('pending truce request expiry', () => {
     const rejected = vi.fn()
     bus.on('diplomacy:truce-rejected', rejected)
 
-    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
-
-    // TRUCE_REQUEST_EXPIRY_TURNS = 3; advance 2 turns — should still be pending
-    diplomacy.update(ctx)
-    diplomacy.update(ctx)
+    // TRUCE_REQUEST_EXPIRY_TURNS = 3; advance turns 1, 2 — should still be pending
+    diplomacy.update(makeCtx(1))
+    diplomacy.update(makeCtx(2))
     expect(rejected).not.toHaveBeenCalled()
     expect(Object.keys(store.getSlice('diplomacy').pendingTruceRequests)).toHaveLength(1)
 
-    // 3rd turn — expires
-    diplomacy.update(ctx)
+    // Turn 3 — expires (requestedAtTurn=0, expiry=0+3=3, 3<=3)
+    diplomacy.update(makeCtx(3))
     expect(rejected).toHaveBeenCalledWith({ requesterId: A, targetId: B })
     expect(Object.keys(store.getSlice('diplomacy').pendingTruceRequests)).toHaveLength(0)
   })
 
   it('does not expire a request that was just answered', () => {
     const bus = makeBus()
-    const store = makeStore(1)
+    const store = makeStore()
     const diplomacy = initDiplomacy(bus, store)
     diplomacy.declareWar(A, B)
     diplomacy.requestTruce(A, B)
@@ -595,8 +596,7 @@ describe('pending truce request expiry', () => {
     const rejected = vi.fn()
     bus.on('diplomacy:truce-rejected', rejected)
 
-    const ctx = { deltaMs: 50, totalMs: 50, frame: 0 }
-    for (let i = 0; i < 5; i++) diplomacy.update(ctx)
+    for (let t = 1; t <= 5; t++) diplomacy.update(makeCtx(t))
 
     // Already removed, so expiry logic should find nothing to expire
     expect(rejected).not.toHaveBeenCalled()

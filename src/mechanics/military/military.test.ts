@@ -32,7 +32,7 @@ function makeMockEventBus() {
 }
 
 function makeBuilding(id: string, provinceId: ProvinceId, buildingType: BuildingType): Building {
-  return { id: id as BuildingId, countryId: ownerId, provinceId, buildingType, completedFrame: 1 }
+  return { id: id as BuildingId, countryId: ownerId, provinceId, buildingType, completedTurn: 1 }
 }
 
 function makeStateStore(existingBuildings: Building[] = [], gold = 1000) {
@@ -74,11 +74,11 @@ describe('requestBuildArmy', () => {
     expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ buildableType: 'army' }))
   })
 
-  it('emits construction:request with durationFrames 60', () => {
+  it('emits construction:request with durationTurns 60', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore()
     requestBuildArmy(bus, store, ownerId, locationId)
-    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationFrames: 60 }))
+    expect(bus.emit).toHaveBeenCalledWith('construction:request', expect.objectContaining({ durationTurns: 60 }))
   })
 
   it('emits construction:request with empty metadata', () => {
@@ -160,7 +160,7 @@ describe('initMilitaryMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'fleet', completedFrame: 5, metadata: {},
+      buildableType: 'fleet', completedTurn: 5, metadata: {},
     })
 
     expect(store.setState).not.toHaveBeenCalled()
@@ -173,7 +173,7 @@ describe('initMilitaryMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 10, metadata: {},
+      buildableType: 'army', completedTurn: 10, metadata: {},
     })
 
     const armies = store.getSlice('military').armies
@@ -190,7 +190,7 @@ describe('initMilitaryMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 10, metadata: {},
+      buildableType: 'army', completedTurn: 10, metadata: {},
     })
 
     expect(bus.emit).toHaveBeenCalledWith('military:army-raised', expect.objectContaining({
@@ -206,25 +206,25 @@ describe('initMilitaryMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 10, metadata: {},
+      buildableType: 'army', completedTurn: 10, metadata: {},
     })
 
     const army = Object.values(store.getSlice('military').armies)[0]
     expect(army.strength).toBe(100)
   })
 
-  it('Army.createdFrame matches completedFrame from the event', () => {
+  it('Army.createdTurn matches completedTurn from the event', () => {
     const bus = makeMockEventBus()
     const store = makeStateStore()
     initMilitaryMechanic(bus, store)
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 42, metadata: {},
+      buildableType: 'army', completedTurn: 42, metadata: {},
     })
 
     const army = Object.values(store.getSlice('military').armies)[0]
-    expect(army.createdFrame).toBe(42)
+    expect(army.createdTurn).toBe(42)
   })
 
   it('multiple completions produce distinct ArmyIds', () => {
@@ -234,11 +234,11 @@ describe('initMilitaryMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     bus.emit('construction:complete', {
       jobId: 'j2' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 2, metadata: {},
+      buildableType: 'army', completedTurn: 2, metadata: {},
     })
 
     const ids = Object.keys(store.getSlice('military').armies) as ArmyId[]
@@ -254,7 +254,7 @@ describe('initMilitaryMechanic — map:province-conquered handler', () => {
       ownerId: countryId,
       locationId: provinceId,
       buildableType: 'army',
-      completedFrame: 1,
+      completedTurn: 1,
       metadata: {},
     })
   }
@@ -357,7 +357,7 @@ describe('initMilitaryMechanic — destroy', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
 
     expect(store.setState).not.toHaveBeenCalled()
@@ -370,7 +370,7 @@ describe('initMilitaryMechanic — destroy', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     destroy()
 
@@ -395,7 +395,7 @@ describe('initMilitaryMechanic — barracks strength bonus', () => {
     initMilitaryMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     const army = Object.values(store.getSlice('military').armies)[0]
     expect(army.strength).toBe(DEFAULT_MILITARY_CONFIG.army.strength)
@@ -408,7 +408,7 @@ describe('initMilitaryMechanic — barracks strength bonus', () => {
     initMilitaryMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     const army = Object.values(store.getSlice('military').armies)[0]
     const expected = DEFAULT_MILITARY_CONFIG.army.strength + DEFAULT_MILITARY_CONFIG.army.barracksStrengthBonus
@@ -422,7 +422,7 @@ describe('initMilitaryMechanic — barracks strength bonus', () => {
     initMilitaryMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     const army = Object.values(store.getSlice('military').armies)[0]
     expect(army.strength).toBe(DEFAULT_MILITARY_CONFIG.army.strength)
@@ -435,7 +435,7 @@ describe('initMilitaryMechanic — barracks strength bonus', () => {
     initMilitaryMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     const army = Object.values(store.getSlice('military').armies)[0]
     expect(army.strength).toBe(DEFAULT_MILITARY_CONFIG.army.strength)
@@ -449,7 +449,7 @@ describe('initMilitaryMechanic — barracks strength bonus', () => {
     initMilitaryMechanic(bus, store)
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 1, metadata: {},
+      buildableType: 'army', completedTurn: 1, metadata: {},
     })
     const army = Object.values(store.getSlice('military').armies)[0]
     const expected = DEFAULT_MILITARY_CONFIG.army.strength + DEFAULT_MILITARY_CONFIG.army.barracksStrengthBonus

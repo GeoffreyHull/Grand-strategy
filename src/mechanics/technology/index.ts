@@ -52,12 +52,12 @@ export function requestResearchTechnology(
   }
 
   eventBus.emit('construction:request', {
-    jobId:          crypto.randomUUID() as JobId,
+    jobId:         crypto.randomUUID() as JobId,
     ownerId,
     locationId,
-    buildableType:  'technology',
-    durationFrames: config.technologies[technologyType].durationFrames,
-    metadata:       { technologyType },
+    buildableType: 'technology',
+    durationTurns: config.technologies[technologyType].durationTurns,
+    metadata:      { technologyType },
   })
 }
 
@@ -80,7 +80,7 @@ export function initTechnologyMechanic(
       countryId:      payload.ownerId,
       provinceId:     payload.locationId,
       technologyType: rawType,
-      completedFrame: payload.completedFrame,
+      completedTurn:  payload.completedTurn,
     }
 
     stateStore.setState(draft => {

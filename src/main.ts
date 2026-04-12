@@ -44,6 +44,18 @@ import {
   buildDiplomacyState,
   initDiplomacy,
 } from './mechanics/diplomacy/index'
+import {
+  buildPopulationState,
+  initPopulationMechanic,
+  loadPopulationConfig,
+  DEFAULT_POPULATION_CONFIG,
+} from './mechanics/population/index'
+import {
+  buildCultureState,
+  initCultureMechanic,
+  loadCultureConfig,
+  DEFAULT_CULTURE_CONFIG,
+} from './mechanics/culture/index'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
@@ -61,12 +73,14 @@ async function loadWithFallback<T>(loader: () => Promise<T>, fallback: T, name: 
   }
 }
 
-const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig] = await Promise.all([
-  loadWithFallback(loadMilitaryConfig, DEFAULT_MILITARY_CONFIG, 'military'),
-  loadWithFallback(loadNavyConfig,     DEFAULT_NAVY_CONFIG,     'navy'),
-  loadWithFallback(loadBuildingsConfig, DEFAULT_BUILDINGS_CONFIG, 'buildings'),
+const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig, populationConfig, cultureConfig] = await Promise.all([
+  loadWithFallback(loadMilitaryConfig,   DEFAULT_MILITARY_CONFIG,   'military'),
+  loadWithFallback(loadNavyConfig,       DEFAULT_NAVY_CONFIG,       'navy'),
+  loadWithFallback(loadBuildingsConfig,  DEFAULT_BUILDINGS_CONFIG,  'buildings'),
   loadWithFallback(loadTechnologyConfig, DEFAULT_TECHNOLOGY_CONFIG, 'technology'),
-  loadWithFallback(loadEconomyConfig,  DEFAULT_ECONOMY_CONFIG,  'economy'),
+  loadWithFallback(loadEconomyConfig,    DEFAULT_ECONOMY_CONFIG,    'economy'),
+  loadWithFallback(loadPopulationConfig, DEFAULT_POPULATION_CONFIG, 'population'),
+  loadWithFallback(loadCultureConfig,    DEFAULT_CULTURE_CONFIG,    'culture'),
 ])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -127,6 +141,8 @@ const stateStore = new StateStore<GameState>({
   technology:   buildTechnologyState(),
   economy:      buildEconomyState(),
   diplomacy:    buildDiplomacyState(),
+  population:   buildPopulationState(),
+  culture:      buildCultureState(),
 })
 const gameLoop = new GameLoop(20)
 
@@ -162,6 +178,16 @@ gameLoop.addUpdateSystem(economyMechanic.update)
 
 const diplomacyMechanic = initDiplomacy(eventBus, stateStore)
 gameLoop.addUpdateSystem(diplomacyMechanic.update)
+
+// ── Population mechanic ───────────────────────────────────────────────────────
+
+const populationMechanic = initPopulationMechanic(eventBus, stateStore, populationConfig)
+gameLoop.addUpdateSystem(populationMechanic.update)
+
+// ── Culture mechanic ──────────────────────────────────────────────────────────
+
+const cultureMechanic = initCultureMechanic(eventBus, stateStore, cultureConfig)
+gameLoop.addUpdateSystem(cultureMechanic.update)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -360,6 +386,16 @@ eventBus.on('diplomacy:ally-forced-peace', ({ allyId, peaceCountryId, enemyId })
   const enemy   = countries[enemyId]?.name ?? enemyId
   const turn = stateStore.getSlice('diplomacy').currentTurn
   appendCombatLog(`${ally} forced to peace with ${enemy} (${peaceBy} made peace)`, 'diplomacy-peace', turn)
+})
+
+eventBus.on('population:grown', ({ provinceId, countryId, amount, newCount }) => {
+  const name = stateStore.getSlice('map').countries[countryId]?.name ?? countryId
+  console.debug(`[Population] ${name}: ${provinceId} grew by ${amount} → ${newCount}`)
+})
+
+eventBus.on('culture:province-converted', ({ provinceId, oldCultureId, newCultureId, countryId }) => {
+  const name = stateStore.getSlice('map').countries[countryId]?.name ?? countryId
+  console.info(`[Culture] ${provinceId} assimilated to ${name}'s culture (${oldCultureId} → ${newCultureId})`)
 })
 
 gameLoop.start()

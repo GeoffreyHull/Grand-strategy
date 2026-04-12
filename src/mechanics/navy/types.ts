@@ -12,7 +12,7 @@ function assertPositiveFiniteNumber(value: unknown, path: string): asserts value
 }
 
 export interface FleetConfig {
-  readonly durationFrames: number
+  readonly durationTurns: number
   readonly ships: number
 }
 
@@ -21,7 +21,7 @@ export interface NavyConfig {
 }
 
 export const DEFAULT_NAVY_CONFIG: NavyConfig = {
-  fleet: { durationFrames: 120, ships: 3 },
+  fleet: { durationTurns: 120, ships: 3 },
 }
 
 export function validateNavyConfig(raw: unknown): NavyConfig {
@@ -32,11 +32,11 @@ export function validateNavyConfig(raw: unknown): NavyConfig {
   if (!isRecord(fleet)) {
     throw new Error('navy.fleet must be an object')
   }
-  assertPositiveFiniteNumber(fleet['durationFrames'], 'navy.fleet.durationFrames')
+  assertPositiveFiniteNumber(fleet['durationTurns'], 'navy.fleet.durationTurns')
   assertPositiveFiniteNumber(fleet['ships'],          'navy.fleet.ships')
   return {
     fleet: {
-      durationFrames: fleet['durationFrames'] as number,
+      durationTurns: fleet['durationTurns'] as number,
       ships:          fleet['ships'] as number,
     },
   }

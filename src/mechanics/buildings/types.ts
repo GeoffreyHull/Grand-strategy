@@ -36,7 +36,7 @@ function assertNonNegativeInteger(value: unknown, path: string): asserts value i
 }
 
 export interface BuildingTypeConfig {
-  readonly durationFrames: number
+  readonly durationTurns: number
   /** Upfront gold cost paid when construction is requested */
   readonly goldCost: number
   /** Gold added to province income per cycle when this building is present */
@@ -58,10 +58,10 @@ export interface BuildingsConfig {
 
 export const DEFAULT_BUILDINGS_CONFIG: BuildingsConfig = {
   buildings: {
-    barracks: { durationFrames: 90,  goldCost: 50, incomeBonus: 0  },
-    port:     { durationFrames: 120, goldCost: 75, incomeBonus: 15 },
-    farm:     { durationFrames: 60,  goldCost: 30, incomeBonus: 10 },
-    walls:    { durationFrames: 90,  goldCost: 60, incomeBonus: 0  },
+    barracks: { durationTurns: 90,  goldCost: 50, incomeBonus: 0  },
+    port:     { durationTurns: 120, goldCost: 75, incomeBonus: 15 },
+    farm:     { durationTurns: 60,  goldCost: 30, incomeBonus: 10 },
+    walls:    { durationTurns: 90,  goldCost: 60, incomeBonus: 0  },
   },
   limits: {
     plains:    { farm: 20, port: 3, barracks: 3, walls: 2 },
@@ -109,11 +109,11 @@ export function validateBuildingsConfig(raw: unknown): BuildingsConfig {
   for (const type of KNOWN_BUILDING_TYPES) {
     const entry = buildings[type]
     if (!isRecord(entry)) throw new Error(`buildings.buildings.${type} must be an object`)
-    assertPositiveFiniteNumber(entry['durationFrames'], `buildings.buildings.${type}.durationFrames`)
+    assertPositiveFiniteNumber(entry['durationTurns'], `buildings.buildings.${type}.durationTurns`)
     assertNonNegativeInteger(entry['goldCost']    as unknown, `buildings.buildings.${type}.goldCost`)
     assertNonNegativeInteger(entry['incomeBonus'] as unknown, `buildings.buildings.${type}.incomeBonus`)
     resultBuildings[type] = {
-      durationFrames: entry['durationFrames'] as number,
+      durationTurns: entry['durationTurns'] as number,
       goldCost:       entry['goldCost']       as number,
       incomeBonus:    entry['incomeBonus']    as number,
     }

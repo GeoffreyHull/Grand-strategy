@@ -14,7 +14,7 @@ export interface Building {
   /** Present only for territory-scoped buildings (e.g. farm). */
   readonly territoryId?: TerritoryId
   readonly buildingType: BuildingType
-  readonly completedFrame: number
+  readonly completedTurn: number
   readonly scope: BuildingScope
 }
 

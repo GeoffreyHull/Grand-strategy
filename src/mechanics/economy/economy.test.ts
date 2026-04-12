@@ -70,8 +70,8 @@ function makeStateStore(provinces: Province[] = []) {
   } as unknown as StateStore<GameState>
 }
 
-function tick(frame: number): TickContext {
-  return { frame, deltaMs: 50, totalMs: frame * 50 }
+function tick(turn: number): TickContext {
+  return { turn, frame: turn * 300, deltaMs: 50, totalMs: turn * 300 * 50 }
 }
 
 const cA = 'country-a' as CountryId
@@ -136,14 +136,10 @@ describe('computeProvinceIncome', () => {
 // ── validateEconomyConfig ─────────────────────────────────────────────────────
 
 describe('validateEconomyConfig', () => {
-  const VALID = { cycleFrames: 60, startingGold: 50, terrainIncome: { plains: 5, hills: 3 } }
+  const VALID = { startingGold: 50, terrainIncome: { plains: 5, hills: 3 } }
 
   it('accepts a valid config', () => {
-    expect(validateEconomyConfig(VALID)).toMatchObject({ cycleFrames: 60, startingGold: 50 })
-  })
-
-  it('throws when cycleFrames is zero', () => {
-    expect(() => validateEconomyConfig({ ...VALID, cycleFrames: 0 })).toThrow('economy.cycleFrames')
+    expect(validateEconomyConfig(VALID)).toMatchObject({ startingGold: 50 })
   })
 
   it('throws when startingGold is negative', () => {
@@ -403,37 +399,28 @@ describe('initEconomyMechanic — map:province-conquered', () => {
 // ── update — income tick ──────────────────────────────────────────────────────
 
 describe('initEconomyMechanic — update', () => {
-  it('adds province income to country gold at a cycle boundary', () => {
+  it('adds province income to country gold each turn', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
     const startGold = store.getSlice('economy').countries[cA].gold
     const income    = store.getSlice('economy').provinces[pA1].currentIncome
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
+    update(tick(1))
 
     expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + income)
   })
 
-  it('does not change gold at non-cycle frames', () => {
+  it('does not collect income twice for the same turn', () => {
     const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(pA1, cA)])
+    const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
     const startGold = store.getSlice('economy').countries[cA].gold
+    const income    = store.getSlice('economy').provinces[pA1].currentIncome
     update(tick(1))
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames - 1))
-    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold)
-  })
-
-  it('does not change gold at frame 0', () => {
-    const bus   = makeMockEventBus()
-    const store = makeStateStore([makeProvince(pA1, cA)])
-    const { update } = initEconomyMechanic(bus, store)
-
-    const startGold = store.getSlice('economy').countries[cA].gold
-    update(tick(0))
-    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold)
+    update(tick(1)) // same turn — no-op
+    expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + income)
   })
 
   it('aggregates income from all owned provinces', () => {
@@ -444,7 +431,7 @@ describe('initEconomyMechanic — update', () => {
     const startGold  = store.getSlice('economy').countries[cA].gold
     const incA1      = store.getSlice('economy').provinces[pA1].currentIncome
     const incA2      = store.getSlice('economy').provinces[pA2].currentIncome
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
+    update(tick(1))
 
     expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + incA1 + incA2)
   })
@@ -454,24 +441,25 @@ describe('initEconomyMechanic — update', () => {
     const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
+    const ctx = tick(1)
+    update(ctx)
 
     expect(bus.emit).toHaveBeenCalledWith('economy:income-collected', expect.objectContaining({
       countryId: cA,
-      frame:     DEFAULT_ECONOMY_CONFIG.cycleFrames,
+      frame:     ctx.frame,
     }))
   })
 
-  it('gold accumulates over multiple cycles', () => {
+  it('gold accumulates over multiple turns', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore([makeProvince(pA1, cA, 'plains')])
     const { update } = initEconomyMechanic(bus, store)
 
     const startGold = store.getSlice('economy').countries[cA].gold
     const income    = store.getSlice('economy').provinces[pA1].currentIncome
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames))
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames * 2))
-    update(tick(DEFAULT_ECONOMY_CONFIG.cycleFrames * 3))
+    update(tick(1))
+    update(tick(2))
+    update(tick(3))
 
     expect(store.getSlice('economy').countries[cA].gold).toBe(startGold + income * 3)
   })

@@ -48,12 +48,12 @@ export function requestBuildFleet(
   }
 
   eventBus.emit('construction:request', {
-    jobId:          crypto.randomUUID() as JobId,
+    jobId:         crypto.randomUUID() as JobId,
     ownerId,
     locationId,
-    buildableType:  'fleet',
-    durationFrames: config.fleet.durationFrames,
-    metadata:       {},
+    buildableType: 'fleet',
+    durationTurns: config.fleet.durationTurns,
+    metadata:      {},
   })
 }
 
@@ -67,11 +67,11 @@ export function initNavyMechanic(
 
     const fleetId = crypto.randomUUID() as FleetId
     const fleet: Fleet = {
-      id:           fleetId,
-      countryId:    payload.ownerId,
-      provinceId:   payload.locationId,
-      ships:        config.fleet.ships,
-      createdFrame: payload.completedFrame,
+      id:          fleetId,
+      countryId:   payload.ownerId,
+      provinceId:  payload.locationId,
+      ships:       config.fleet.ships,
+      createdTurn: payload.completedTurn,
     }
 
     stateStore.setState(draft => ({

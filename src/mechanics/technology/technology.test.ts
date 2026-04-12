@@ -84,13 +84,13 @@ describe('requestResearchTechnology — event payload', () => {
     ['siege-engineering', 100],
     ['cartography',       80],
     ['bureaucracy',       90],
-  ])('emits correct durationFrames for %s (%i)', (technologyType: TechnologyType, expected: number) => {
+  ])('emits correct durationTurns for %s (%i)', (technologyType: TechnologyType, expected: number) => {
     const bus   = makeMockEventBus()
     const store = makeStateStore()
     requestResearchTechnology(bus, store, ownerId, locationId, technologyType)
     expect(bus.emit).toHaveBeenCalledWith(
       'construction:request',
-      expect.objectContaining({ durationFrames: expected }),
+      expect.objectContaining({ durationTurns: expected }),
     )
   })
 
@@ -114,7 +114,7 @@ describe('requestResearchTechnology — duplicate prevention', () => {
     // Complete first research
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 10, metadata: { technologyType: 'agriculture' },
+      buildableType: 'technology', completedTurn: 10, metadata: { technologyType: 'agriculture' },
     })
 
     // Try to research again
@@ -134,7 +134,7 @@ describe('requestResearchTechnology — duplicate prevention', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 10, metadata: { technologyType: 'agriculture' },
+      buildableType: 'technology', completedTurn: 10, metadata: { technologyType: 'agriculture' },
     })
 
     bus.emit.mockClear()
@@ -150,7 +150,7 @@ describe('requestResearchTechnology — duplicate prevention', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 10, metadata: { technologyType: 'agriculture' },
+      buildableType: 'technology', completedTurn: 10, metadata: { technologyType: 'agriculture' },
     })
 
     // Different country requests the same tech — should be allowed
@@ -197,7 +197,7 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'army', completedFrame: 5, metadata: {},
+      buildableType: 'army', completedTurn: 5, metadata: {},
     })
 
     expect(store.setState).not.toHaveBeenCalled()
@@ -210,7 +210,7 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 5, metadata: { technologyType: 'gunpowder' },
+      buildableType: 'technology', completedTurn: 5, metadata: { technologyType: 'gunpowder' },
     })
 
     expect(store.setState).not.toHaveBeenCalled()
@@ -226,7 +226,7 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 5, metadata: { technologyType },
+      buildableType: 'technology', completedTurn: 5, metadata: { technologyType },
     })
 
     const techs = store.getSlice('technology').technologies
@@ -242,7 +242,7 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 5, metadata: { technologyType: 'writing' },
+      buildableType: 'technology', completedTurn: 5, metadata: { technologyType: 'writing' },
     })
 
     expect(store.getSlice('technology').byCountry[ownerId]).toContain('writing')
@@ -255,7 +255,7 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 5, metadata: { technologyType: 'trade-routes' },
+      buildableType: 'technology', completedTurn: 5, metadata: { technologyType: 'trade-routes' },
     })
 
     expect(bus.emit).toHaveBeenCalledWith('technology:research-completed', expect.objectContaining({
@@ -264,18 +264,18 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
     }))
   })
 
-  it('ResearchedTechnology.completedFrame matches completedFrame from the event', () => {
+  it('ResearchedTechnology.completedTurn matches completedTurn from the event', () => {
     const bus   = makeMockEventBus()
     const store = makeStateStore()
     initTechnologyMechanic(bus, store)
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 77, metadata: { technologyType: 'cartography' },
+      buildableType: 'technology', completedTurn: 77, metadata: { technologyType: 'cartography' },
     })
 
     const entry = Object.values(store.getSlice('technology').technologies)[0]
-    expect(entry.completedFrame).toBe(77)
+    expect(entry.completedTurn).toBe(77)
   })
 
   it('multiple technologies can coexist for the same country', () => {
@@ -285,11 +285,11 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 1, metadata: { technologyType: 'agriculture' },
+      buildableType: 'technology', completedTurn: 1, metadata: { technologyType: 'agriculture' },
     })
     bus.emit('construction:complete', {
       jobId: 'j2' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 2, metadata: { technologyType: 'writing' },
+      buildableType: 'technology', completedTurn: 2, metadata: { technologyType: 'writing' },
     })
 
     expect(Object.keys(store.getSlice('technology').technologies)).toHaveLength(2)
@@ -303,11 +303,11 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 1, metadata: { technologyType: 'agriculture' },
+      buildableType: 'technology', completedTurn: 1, metadata: { technologyType: 'agriculture' },
     })
     bus.emit('construction:complete', {
       jobId: 'j2' as JobId, ownerId: otherId, locationId,
-      buildableType: 'technology', completedFrame: 2, metadata: { technologyType: 'writing' },
+      buildableType: 'technology', completedTurn: 2, metadata: { technologyType: 'writing' },
     })
 
     expect(store.getSlice('technology').byCountry[ownerId]).toEqual(['agriculture'])
@@ -324,7 +324,7 @@ describe('initTechnologyMechanic — destroy', () => {
 
     bus.emit('construction:complete', {
       jobId: 'j1' as JobId, ownerId, locationId,
-      buildableType: 'technology', completedFrame: 1, metadata: { technologyType: 'agriculture' },
+      buildableType: 'technology', completedTurn: 1, metadata: { technologyType: 'agriculture' },
     })
 
     expect(store.setState).not.toHaveBeenCalled()

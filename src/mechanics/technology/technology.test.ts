@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   buildTechnologyState,
   initTechnologyMechanic,
+  initTechnologyEffects,
   requestResearchTechnology,
 } from './index'
 import { isTechnologyType } from './types'
@@ -312,6 +313,131 @@ describe('initTechnologyMechanic — construction:complete handler', () => {
 
     expect(store.getSlice('technology').byCountry[ownerId]).toEqual(['agriculture'])
     expect(store.getSlice('technology').byCountry[otherId]).toEqual(['writing'])
+  })
+})
+
+describe('initTechnologyEffects — agriculture', () => {
+  it('emits economy:owner-modifier-added on agriculture research', () => {
+    const bus = makeMockEventBus()
+    initTechnologyEffects(bus)
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-1' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      ownerId,
+      technologyType: 'agriculture',
+    })
+
+    expect(bus.emit).toHaveBeenCalledWith('economy:owner-modifier-added', expect.objectContaining({
+      countryId: ownerId,
+      modifier:  expect.objectContaining({
+        op:        'multiply',
+        value:     1.2,
+        label:     'Agriculture',
+        condition: { type: 'hasBuilding', buildingType: 'farm' },
+      }),
+    }))
+  })
+
+  it('uses a stable modifier id scoped to the country', () => {
+    const bus = makeMockEventBus()
+    initTechnologyEffects(bus)
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-1' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      ownerId,
+      technologyType: 'agriculture',
+    })
+
+    expect(bus.emit).toHaveBeenCalledWith('economy:owner-modifier-added', expect.objectContaining({
+      modifier: expect.objectContaining({ id: `technology:agriculture:${ownerId}` }),
+    }))
+  })
+
+  it('scopes modifier id to country — different countries get different ids', () => {
+    const bus = makeMockEventBus()
+    initTechnologyEffects(bus)
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-2' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      otherId,
+      technologyType: 'agriculture',
+    })
+
+    expect(bus.emit).toHaveBeenCalledWith('economy:owner-modifier-added', expect.objectContaining({
+      countryId: otherId,
+      modifier:  expect.objectContaining({ id: `technology:agriculture:${otherId}` }),
+    }))
+  })
+})
+
+describe('initTechnologyEffects — trade-routes', () => {
+  it('emits economy:owner-modifier-added on trade-routes research', () => {
+    const bus = makeMockEventBus()
+    initTechnologyEffects(bus)
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-1' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      ownerId,
+      technologyType: 'trade-routes',
+    })
+
+    expect(bus.emit).toHaveBeenCalledWith('economy:owner-modifier-added', expect.objectContaining({
+      countryId: ownerId,
+      modifier:  expect.objectContaining({
+        op:        'multiply',
+        value:     1.15,
+        label:     'Trade Routes',
+        condition: { type: 'hasBuilding', buildingType: 'port' },
+      }),
+    }))
+  })
+
+  it('uses a stable modifier id scoped to the country', () => {
+    const bus = makeMockEventBus()
+    initTechnologyEffects(bus)
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-1' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      ownerId,
+      technologyType: 'trade-routes',
+    })
+
+    expect(bus.emit).toHaveBeenCalledWith('economy:owner-modifier-added', expect.objectContaining({
+      modifier: expect.objectContaining({ id: `technology:trade-routes:${ownerId}` }),
+    }))
+  })
+})
+
+describe('initTechnologyEffects — no-op technologies', () => {
+  it.each<TechnologyType>([
+    'iron-working', 'steel-working', 'writing', 'siege-engineering', 'cartography', 'bureaucracy',
+  ])('does not emit economy:owner-modifier-added for %s (pending contract work)', (technologyType: TechnologyType) => {
+    const bus = makeMockEventBus()
+    initTechnologyEffects(bus)
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-1' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      ownerId,
+      technologyType,
+    })
+
+    expect(bus.emit).not.toHaveBeenCalledWith('economy:owner-modifier-added', expect.anything())
+  })
+})
+
+describe('initTechnologyEffects — destroy', () => {
+  it('stops responding after destroy', () => {
+    const bus = makeMockEventBus()
+    const { destroy } = initTechnologyEffects(bus)
+    destroy()
+
+    bus.emit('technology:research-completed', {
+      technologyId:   'tid-1' as import('@contracts/mechanics/technology').TechnologyId,
+      countryId:      ownerId,
+      technologyType: 'agriculture',
+    })
+
+    expect(bus.emit).not.toHaveBeenCalledWith('economy:owner-modifier-added', expect.anything())
   })
 })
 

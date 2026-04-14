@@ -66,5 +66,23 @@ export type {
   CultureState,
 } from './mechanics/culture'
 
+export type {
+  ClimateTag,
+  ClimateEventType,
+  ClimateEffects,
+  ActiveClimateEvent,
+  ClimateState,
+} from './mechanics/climate'
+
+export type {
+  LedgerCategory,
+  LedgerEntry,
+  RelationshipLedger,
+  InvestmentBias,
+  ArchetypeWeights,
+  NationPersonality,
+  PersonalityState,
+} from './mechanics/personality'
+
 export type { EventMap } from './events'
 export type { MapState, GameState } from './state'

@@ -8,6 +8,8 @@ import type { BuildingId, BuildingType, BuildingScope } from './mechanics/buildi
 import type { TechnologyId, TechnologyType } from './mechanics/technology'
 import type { IncomeModifier } from './mechanics/economy'
 import type { CultureId } from './mechanics/culture'
+import type { ActiveClimateEvent, ClimateEventType } from './mechanics/climate'
+import type { LedgerEntry, InvestmentBias } from './mechanics/personality'
 
 export interface EventMap {
   // Map mechanic events
@@ -251,5 +253,33 @@ export interface EventMap {
     readonly provinceId: ProvinceId
     readonly progress: number
     readonly targetCultureId: CultureId
+  }
+
+  // Climate mechanic events
+  'climate:event-started': {
+    readonly event: ActiveClimateEvent
+  }
+  'climate:event-expired': {
+    readonly eventId: string
+    readonly provinceId: ProvinceId
+    readonly eventType: ClimateEventType
+  }
+
+  // Personality mechanic events
+  'personality:ledger-entry-added': {
+    readonly countryId: CountryId
+    readonly targetId: CountryId
+    readonly entry: LedgerEntry
+  }
+  'personality:ledger-entry-decayed': {
+    readonly countryId: CountryId
+    readonly targetId: CountryId
+    readonly entryId: string
+    readonly newMagnitude: number
+  }
+  'personality:bias-changed': {
+    readonly countryId: CountryId
+    readonly field: keyof InvestmentBias
+    readonly newValue: number
   }
 }

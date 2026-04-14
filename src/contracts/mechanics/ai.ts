@@ -3,11 +3,11 @@
 import type { CountryId } from './map'
 
 export type AIPersonalityArchetype =
-  | 'conqueror'     // aggressive expansion, military-focused
-  | 'diplomat'      // alliance-seeking, conflict-averse
-  | 'merchant'      // economy-focused, trade-oriented
+  | 'expansionist'  // aggressive expansion, military-focused
+  | 'hegemon'       // coalition-builder, watches rising powers, threat-oriented
+  | 'mercantile'    // economy-focused, trade-oriented
   | 'isolationist'  // defensive, self-sufficient, inward-facing
-  | 'zealot'        // ideology-driven, unpredictable aggression
+  | 'zealot'        // ideology-driven, religion-sensitive aggression
 
 export interface AIPersonality {
   readonly archetype: AIPersonalityArchetype

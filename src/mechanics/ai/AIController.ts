@@ -14,6 +14,11 @@ import type {
 import type { DiplomacyState } from '@contracts/mechanics/diplomacy'
 import type { TechnologyState } from '@contracts/mechanics/technology'
 import type { CountryId } from '@contracts/mechanics/map'
+import type {
+  LedgerEntry,
+  NationPersonality,
+  PersonalityState,
+} from '@contracts/mechanics/personality'
 import type { ScoredAction, AIContext } from './types'
 
 // Total number of distinct technology types — drives RESEARCH urgency.
@@ -30,13 +35,48 @@ const ACTION_MAX_REPS: Readonly<Record<AIActionType, number>> = {
   SEEK_PEACE: 1,  // request truce with at most 1 enemy per decision
 }
 
+// ── Personality helpers ───────────────────────────────────────────────────────
+// These read `NationPersonality` directly from state; no import from the
+// personality mechanic is needed (isolation rule 2).
+
+/** Look up the personality record for a country. Returns null if absent. */
+function getPersonality(
+  personalityState: PersonalityState | undefined,
+  countryId: CountryId,
+): NationPersonality | null {
+  if (!personalityState) return null
+  return personalityState.nations[countryId as string] ?? null
+}
+
+/** Sum of ledger-entry magnitudes toward target, each scaled by the owning archetype's category multiplier. */
+function weightedTrustFor(
+  nation: NationPersonality,
+  targetId: CountryId,
+): number {
+  const entries: readonly LedgerEntry[] = nation.ledger.entries[targetId as string] ?? []
+  if (entries.length === 0) return 0
+  const mults = nation.weights.ledgerCategoryMultipliers
+  let total = 0
+  for (const e of entries) {
+    total += e.magnitude * (mults[e.category] ?? 1)
+  }
+  return total
+}
+
 // ── Utility scoring ───────────────────────────────────────────────────────────
 
 /**
  * Score the EXPAND action (0–1).
  * Smaller nations and those with foreign neighbours score higher.
+ * When a personality record is available, accumulated hostility toward *any*
+ * existing nation raises the score — this is how climate-driven opportunism
+ * and rising-power signals bubble up into war willingness.
  */
-function scoreExpand(countryId: CountryId, mapState: MapState): number {
+function scoreExpand(
+  countryId: CountryId,
+  mapState: MapState,
+  personalityState?: PersonalityState,
+): number {
   const allCounts = Object.values(mapState.countries).map(c => c.provinceIds.length)
   const maxCount = Math.max(...allCounts, 1)
   const ownCount = mapState.countries[countryId]?.provinceIds.length ?? 0
@@ -48,14 +88,40 @@ function scoreExpand(countryId: CountryId, mapState: MapState): number {
   )
   if (hasForeignNeighbours) score = Math.min(1, score + 0.15)
 
+  const nation = getPersonality(personalityState, countryId)
+  if (nation) {
+    // Find the most hostile weighted-trust value toward any other nation.
+    let peakHostility = 0
+    for (const otherId of Object.keys(mapState.countries)) {
+      if (otherId === countryId) continue
+      const trust = weightedTrustFor(nation, otherId as CountryId)
+      if (trust < peakHostility) peakHostility = trust
+    }
+    // peakHostility is a small negative number (e.g. -30). Scale it into 0..0.25
+    // and modulate by the archetype's warWillingness so Expansionists react
+    // harder than Hegemons to the same opportunity signal.
+    const opportunityBoost = Math.min(0.25, Math.abs(peakHostility) / 120) * nation.weights.warWillingness
+    score = Math.min(1, score + opportunityBoost)
+
+    // Investment bias: religious aggression tacks onto expansion score;
+    // defensive urge suppresses it.
+    score += nation.bias.religiousAggression * 0.1
+    score -= nation.bias.defensiveUrge * 0.15
+  }
+
   return Math.min(1, Math.max(0, score))
 }
 
 /**
  * Score the FORTIFY action (0–1).
  * Nations with many coastal, hilly, or mountainous provinces score higher.
+ * Defensive-urge bias boosts the score when the personality mechanic is wired.
  */
-function scoreFortify(countryId: CountryId, mapState: MapState): number {
+function scoreFortify(
+  countryId: CountryId,
+  mapState: MapState,
+  personalityState?: PersonalityState,
+): number {
   const country = mapState.countries[countryId]
   if (!country || country.provinceIds.length === 0) return 0.3
 
@@ -73,7 +139,12 @@ function scoreFortify(countryId: CountryId, mapState: MapState): number {
   }
 
   const ratio = borderCount / country.provinceIds.length
-  return Math.min(1, Math.max(0, ratio))
+  let score = ratio
+
+  const nation = getPersonality(personalityState, countryId)
+  if (nation) score += nation.bias.defensiveUrge * 0.2
+
+  return Math.min(1, Math.max(0, score))
 }
 
 /**
@@ -97,7 +168,7 @@ function scoreAlly(
 
   let score = 0.3
 
-  const threateningArchetypes = new Set(['conqueror', 'zealot'])
+  const threateningArchetypes = new Set(['expansionist', 'zealot'])
   for (const [id, state] of Object.entries(aiState.countries)) {
     if (id === countryId) continue
     if (threateningArchetypes.has(state.personality.archetype)) {
@@ -123,12 +194,27 @@ function scoreIsolate(personality: AIPersonality): number {
  * Score the RESEARCH action (0–1).
  * Rises with the fraction of undiscovered technologies.
  * Weighted by personality.economy in the candidates list.
+ * Naval-investment and economic-urge biases boost the base score — a
+ * Mercantile nation repeatedly storm-blocked accumulates navalInvestment and
+ * tilts toward RESEARCH (over time, into naval tech specifically when the
+ * tech-selection layer supports it).
  */
-function scoreResearch(countryId: CountryId, technologyState: TechnologyState): number {
+function scoreResearch(
+  countryId: CountryId,
+  technologyState: TechnologyState,
+  personalityState?: PersonalityState,
+): number {
   const known = technologyState.byCountry[countryId]?.length ?? 0
   const remaining = TOTAL_TECH_COUNT - known
   if (remaining === 0) return 0
-  return remaining / TOTAL_TECH_COUNT
+  let score = remaining / TOTAL_TECH_COUNT
+
+  const nation = getPersonality(personalityState, countryId)
+  if (nation) {
+    score += nation.bias.navalInvestment * 0.15
+    score += nation.bias.economicUrge * 0.1
+  }
+  return Math.min(1, score)
 }
 
 /**
@@ -221,16 +307,16 @@ export class AIController {
     frame: number,
   ): AIDecision {
     const { countryId, personality } = countryState
-    const { mapState, aiState, diplomacyState, technologyState } = context
+    const { mapState, aiState, diplomacyState, technologyState, personalityState } = context
 
     const candidates: ScoredAction[] = [
       {
         action: 'EXPAND',
-        score: scoreExpand(countryId, mapState) * personality.aggression + Math.random() * 0.1,
+        score: scoreExpand(countryId, mapState, personalityState) * personality.aggression + Math.random() * 0.1,
       },
       {
         action: 'FORTIFY',
-        score: scoreFortify(countryId, mapState) * personality.caution + Math.random() * 0.1,
+        score: scoreFortify(countryId, mapState, personalityState) * personality.caution + Math.random() * 0.1,
       },
       {
         action: 'ALLY',
@@ -242,7 +328,7 @@ export class AIController {
       },
       {
         action: 'RESEARCH',
-        score: scoreResearch(countryId, technologyState) * personality.economy + Math.random() * 0.1,
+        score: scoreResearch(countryId, technologyState, personalityState) * personality.economy + Math.random() * 0.1,
       },
       {
         action: 'SEEK_PEACE',
@@ -256,7 +342,7 @@ export class AIController {
     if (best.action === 'ALLY') {
       targetCountryId = this.findAllyTarget(countryId, aiState, diplomacyState)
     } else if (best.action === 'EXPAND') {
-      targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState)
+      targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState, new Set(), personalityState)
     } else if (best.action === 'SEEK_PEACE') {
       targetCountryId = this.findWarEnemy(countryId, mapState, diplomacyState)
     }
@@ -289,16 +375,16 @@ export class AIController {
     frame: number,
   ): readonly AIDecision[] {
     const { countryId, personality } = countryState
-    const { mapState, aiState, diplomacyState, technologyState } = context
+    const { mapState, aiState, diplomacyState, technologyState, personalityState } = context
 
     const candidates: ScoredAction[] = [
       {
         action: 'EXPAND',
-        score: scoreExpand(countryId, mapState) * personality.aggression + Math.random() * 0.1,
+        score: scoreExpand(countryId, mapState, personalityState) * personality.aggression + Math.random() * 0.1,
       },
       {
         action: 'FORTIFY',
-        score: scoreFortify(countryId, mapState) * personality.caution + Math.random() * 0.1,
+        score: scoreFortify(countryId, mapState, personalityState) * personality.caution + Math.random() * 0.1,
       },
       {
         action: 'ALLY',
@@ -310,7 +396,7 @@ export class AIController {
       },
       {
         action: 'RESEARCH',
-        score: scoreResearch(countryId, technologyState) * personality.economy + Math.random() * 0.1,
+        score: scoreResearch(countryId, technologyState, personalityState) * personality.economy + Math.random() * 0.1,
       },
       {
         action: 'SEEK_PEACE',
@@ -356,7 +442,7 @@ export class AIController {
           if (targetCountryId === null && r > 0) break
           if (targetCountryId !== null) usedAllyTargets.add(targetCountryId)
         } else if (candidate.action === 'EXPAND') {
-          targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState, usedWarTargets)
+          targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState, usedWarTargets, personalityState)
           // No more unique war targets available — stop repeating this action.
           if (targetCountryId === null && r > 0) break
           if (targetCountryId !== null) usedWarTargets.add(targetCountryId)
@@ -383,7 +469,7 @@ export class AIController {
       if (best.action === 'ALLY') {
         targetCountryId = this.findAllyTarget(countryId, aiState, diplomacyState)
       } else if (best.action === 'EXPAND') {
-        targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState)
+        targetCountryId = this.findWarTarget(countryId, mapState, diplomacyState, new Set(), personalityState)
       } else if (best.action === 'SEEK_PEACE') {
         targetCountryId = this.findWarEnemy(countryId, mapState, diplomacyState)
       }
@@ -440,7 +526,7 @@ export class AIController {
     diplomacyState: DiplomacyState,
     excluded: ReadonlySet<CountryId> = new Set(),
   ): CountryId | null {
-    const friendlyArchetypes = new Set(['diplomat', 'merchant'])
+    const friendlyArchetypes = new Set(['hegemon', 'mercantile'])
     let best: CountryId | null = null
     let bestScore = -1
 
@@ -469,6 +555,12 @@ export class AIController {
    * Find the best war target for an EXPAND decision, excluding already-chosen targets.
    * Prefers weaker countries (fewer provinces) that can be legally attacked:
    * not allied, not already at war, not in an active truce.
+   *
+   * When a personality record is supplied, the score is additionally tilted by
+   * the attacker's archetype-weighted trust toward each candidate: a low-trust
+   * (hostile) neighbour becomes more attractive than a marginally weaker but
+   * neutral one. With an empty ledger, behaviour reduces to weakest-first.
+   *
    * Returns null when no valid target exists.
    */
   private findWarTarget(
@@ -476,9 +568,12 @@ export class AIController {
     mapState: MapState,
     diplomacyState: DiplomacyState,
     excluded: ReadonlySet<CountryId> = new Set(),
+    personalityState?: PersonalityState,
   ): CountryId | null {
+    const nation = getPersonality(personalityState, countryId)
+
     let best: CountryId | null = null
-    let bestProvinceCount = Infinity
+    let bestCost = Infinity
 
     for (const [id, country] of Object.entries(mapState.countries)) {
       if (id === countryId) continue
@@ -489,8 +584,18 @@ export class AIController {
       const status = diplomacyState.relations[key]?.status ?? 'neutral'
       if (status === 'allied' || status === 'war' || status === 'truce') continue
 
-      if (country.provinceIds.length < bestProvinceCount) {
-        bestProvinceCount = country.provinceIds.length
+      // Base cost: fewer provinces = cheaper target.
+      let cost = country.provinceIds.length
+
+      // Hostility discount: each point of negative trust shaves cost, so
+      // low-trust neighbours are preferred over equally-sized neutrals.
+      if (nation) {
+        const trust = weightedTrustFor(nation, id as CountryId)
+        if (trust < 0) cost += trust * 0.05  // trust is negative → cost drops
+      }
+
+      if (cost < bestCost) {
+        bestCost = cost
         best = id as CountryId
       }
     }

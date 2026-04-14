@@ -184,16 +184,16 @@ describe('DEFAULT_PERSONALITIES', () => {
     expect(Object.keys(DEFAULT_PERSONALITIES).length).toBe(20)
   })
 
-  it('kharrath is a conqueror', () => {
-    expect(DEFAULT_PERSONALITIES['kharrath']?.archetype).toBe('conqueror')
+  it('kharrath is an expansionist', () => {
+    expect(DEFAULT_PERSONALITIES['kharrath']?.archetype).toBe('expansionist')
   })
 
-  it('solenne is a diplomat', () => {
-    expect(DEFAULT_PERSONALITIES['solenne']?.archetype).toBe('diplomat')
+  it('solenne is a hegemon', () => {
+    expect(DEFAULT_PERSONALITIES['solenne']?.archetype).toBe('hegemon')
   })
 
-  it('auren is a merchant', () => {
-    expect(DEFAULT_PERSONALITIES['auren']?.archetype).toBe('merchant')
+  it('auren is mercantile', () => {
+    expect(DEFAULT_PERSONALITIES['auren']?.archetype).toBe('mercantile')
   })
 
   it('dravenn is an isolationist', () => {
@@ -251,7 +251,7 @@ describe('AIController.evaluateDecision', () => {
   it('EXPAND decision includes a targetCountryId when a valid war target exists', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
-    // kharrath (conqueror, high aggression) with a small province count to maximise EXPAND score
+    // kharrath (expansionist, high aggression) with a small province count to maximise EXPAND score
     const mapState = makeMapState({ kharrath: 1, valdorn: 5 })
     const aiState = makeAIState()
     const context = makeContext(mapState, aiState)
@@ -432,7 +432,7 @@ describe('AIController.update — decision interval', () => {
 // ── Personality weighting ─────────────────────────────────────────────────────
 
 describe('personality weighting', () => {
-  it('conqueror prefers EXPAND over ISOLATE on average', () => {
+  it('expansionist prefers EXPAND over ISOLATE on average', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ kharrath: 3, solenne: 10 })
@@ -472,7 +472,7 @@ describe('personality weighting', () => {
     expect(defensiveCount).toBeGreaterThan(expandCount)
   })
 
-  it('diplomat prefers ALLY over EXPAND on average', () => {
+  it('hegemon prefers ALLY over EXPAND on average', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
     const mapState = makeMapState({ solenne: 7, kharrath: 4 })
@@ -494,10 +494,10 @@ describe('personality weighting', () => {
     expect(allyCount).toBeGreaterThan(expandCount)
   })
 
-  it('merchant prioritises RESEARCH over EXPAND on average', () => {
+  it('mercantile prioritises RESEARCH over EXPAND on average', () => {
     const bus = mockEventBus()
     const ctrl = new AIController(bus)
-    // Give auren (merchant) a medium province count so EXPAND isn't zero
+    // Give auren (mercantile) a medium province count so EXPAND isn't zero
     const mapState = makeMapState({ auren: 5, kharrath: 8 })
     const aiState = makeAIState()
     const context = makeContext(mapState, aiState)
@@ -533,28 +533,28 @@ describe('SEEK_PEACE scoring', () => {
     expect(total).toBe(0)
   })
 
-  it('diplomat personality seeks peace more often than conqueror when losing', () => {
+  it('hegemon personality seeks peace more often than expansionist when losing', () => {
     const ctrl = new AIController(mockEventBus())
     // kharrath is at war with a much larger solenne — kharrath is losing
     const mapState = makeMapState({ kharrath: 2, solenne: 10 })
     const diplomacyState: Partial<DiplomacyState> = { relations: warRelation('kharrath', 'solenne') }
 
-    // Override kharrath's personality to be a diplomat for the diplomatic context
-    const diplomatAI = makeAIState({ kharrath: { personality: DEFAULT_PERSONALITIES['solenne']! } })
-    // kharrath keeps its conqueror personality in the default context
-    const conquerorAI = makeAIState()
+    // Override kharrath's personality to be a hegemon for the diplomatic context
+    const hegemonAI = makeAIState({ kharrath: { personality: DEFAULT_PERSONALITIES['solenne']! } })
+    // kharrath keeps its expansionist personality in the default context
+    const expansionistAI = makeAIState()
 
-    const diplomatContext = makeContext(mapState, diplomatAI, diplomacyState)
-    const conquerorContext = makeContext(mapState, conquerorAI, diplomacyState)
+    const hegemonContext = makeContext(mapState, hegemonAI, diplomacyState)
+    const expansionistContext = makeContext(mapState, expansionistAI, diplomacyState)
 
-    let diplomatPeace = 0
-    let conquerorPeace = 0
+    let hegemonPeace = 0
+    let expansionistPeace = 0
     for (let i = 0; i < 200; i++) {
-      if (ctrl.evaluateDecision(diplomatAI.countries['kharrath']!, diplomatContext, i).action === 'SEEK_PEACE') diplomatPeace++
-      if (ctrl.evaluateDecision(conquerorAI.countries['kharrath']!, conquerorContext, i).action === 'SEEK_PEACE') conquerorPeace++
+      if (ctrl.evaluateDecision(hegemonAI.countries['kharrath']!, hegemonContext, i).action === 'SEEK_PEACE') hegemonPeace++
+      if (ctrl.evaluateDecision(expansionistAI.countries['kharrath']!, expansionistContext, i).action === 'SEEK_PEACE') expansionistPeace++
     }
 
-    expect(diplomatPeace).toBeGreaterThan(conquerorPeace)
+    expect(hegemonPeace).toBeGreaterThan(expansionistPeace)
   })
 
   it('SEEK_PEACE targets the war enemy with the most provinces', () => {
@@ -562,7 +562,7 @@ describe('SEEK_PEACE scoring', () => {
     // kharrath is at war with solenne; solenne is the stronger enemy
     const mapState = makeMapState({ kharrath: 3, solenne: 8 })
     const diplomacyState: Partial<DiplomacyState> = { relations: warRelation('kharrath', 'solenne') }
-    // Give kharrath a diplomat personality so it prefers SEEK_PEACE
+    // Give kharrath a hegemon personality so it prefers SEEK_PEACE
     const aiState = makeAIState({ kharrath: { personality: DEFAULT_PERSONALITIES['solenne']! } })
     const context = makeContext(mapState, aiState, diplomacyState)
 
@@ -579,11 +579,11 @@ describe('SEEK_PEACE scoring', () => {
 // ── evaluateTruceResponse ─────────────────────────────────────────────────────
 
 describe('evaluateTruceResponse', () => {
-  it('conqueror winning decisively rejects more often than it accepts', () => {
+  it('expansionist winning decisively rejects more often than it accepts', () => {
     const ctrl = new AIController(mockEventBus())
-    // kharrath (conqueror) has far more provinces than solenne → clearly winning
+    // kharrath (expansionist) has far more provinces than solenne → clearly winning
     const mapState = makeMapState({ solenne: 2, kharrath: 12 })
-    const aiState = makeAIState() // kharrath is conqueror by default
+    const aiState = makeAIState() // kharrath is expansionist by default
     const context = makeContext(mapState, aiState)
 
     // solenne (requester) → kharrath (responder/target)
@@ -594,11 +594,11 @@ describe('evaluateTruceResponse', () => {
     expect(acceptCount).toBeLessThan(30) // rejects most of the time
   })
 
-  it('diplomat losing accepts more often than it rejects', () => {
+  it('hegemon losing accepts more often than it rejects', () => {
     const ctrl = new AIController(mockEventBus())
-    // kharrath (requester) has far more provinces; solenne (diplomat, responder) is struggling
+    // kharrath (requester) has far more provinces; solenne (hegemon, responder) is struggling
     const mapState = makeMapState({ kharrath: 12, solenne: 2 })
-    const aiState = makeAIState() // solenne is diplomat by default
+    const aiState = makeAIState() // solenne is hegemon by default
     const context = makeContext(mapState, aiState)
 
     // kharrath (requester) → solenne (responder/target)
@@ -620,7 +620,7 @@ describe('evaluateTruceResponse', () => {
 
 describe('type correctness', () => {
   it('AIPersonality stat values are in [0, 1] for all archetypes', () => {
-    const archetypes = ['conqueror', 'diplomat', 'merchant', 'isolationist', 'zealot'] as const
+    const archetypes = ['expansionist', 'hegemon', 'mercantile', 'isolationist', 'zealot'] as const
     const seen = new Set<string>()
 
     for (const [, personality] of Object.entries(DEFAULT_PERSONALITIES) as [string, AIPersonality][]) {

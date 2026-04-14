@@ -110,3 +110,29 @@ Farms are territory-scoped — their limit (1 per territory) is checked via
 - **Building ownership does not transfer on conquest.** `building.countryId` records who built it and never changes.
 - **Walls are destroyed on conquest.** All walls in a conquered province are removed from state. Other buildings (barracks, farms, ports) survive intact.
 - No update function is needed — the mechanic is purely event-driven.
+
+## Roadmap
+
+### 1. Technology gates building unlocks (buildings ↔ technology)
+
+Today any building can be built by anyone with the gold. Add a `techPrerequisite` field per building type so progression unlocks new types.
+
+- Examples: `barracks` requires `iron-working`, `port` requires `cartography`, future `marketplace` requires `trade-routes`.
+- `requestBuildBuilding` reads the country's researched techs from the shared state slice (no cross-mechanic import) and rejects with a new reason `'technology-required'` if missing.
+- New config: `techPrerequisite?: TechnologyType` per building entry in `BuildingsConfig`.
+- Contract additions: extend `buildings:build-rejected.reason` union with `'technology-required'`; `BuildingsConfig` gains `techPrerequisite` field.
+
+### 2. Building deterioration from neglect (buildings ↔ economy)
+
+Add a maintenance cost per building per economy cycle. When a country's gold goes negative, buildings start deteriorating; after a configurable grace window of unpaid upkeep, the most-recently-completed buildings are demolished.
+
+- Each cycle: emit `economy:gold-deducted { reason: 'maintenance:<buildingType>' }` per active building.
+- If the deduction would push gold below zero, increment the building's `unpaidCycles` counter and emit `buildings:building-deteriorated`.
+- When `unpaidCycles >= neglectGraceFrames / cycleFrames`, remove the building, fire `economy:province-modifier-removed`, and emit `buildings:building-demolished { reason: 'neglect' }` (distinct from the conquest-driven `building-destroyed`).
+- New config: `maintenanceCostPerCycle` per building type; `neglectGraceCycles`.
+- Contract additions: two new event keys (`buildings:building-deteriorated`, `buildings:building-demolished`); `Building` gains `unpaidCycles: number`.
+
+### Implementation order (suggested)
+
+1. **Tech-gated unlocks** — pure validation addition, no new state, smallest blast radius.
+2. **Deterioration** — adds per-tick state mutation and a real failure mode; land after tech gates so the unlock progression is visible first.

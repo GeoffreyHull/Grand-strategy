@@ -61,4 +61,21 @@ interface Army {
 - Army destruction on conquest is purely positional: any army belonging to the old owner in the exact conquered province is removed. Armies in adjacent provinces are unaffected.
 - Multiple armies stacked in the same province are all destroyed together.
 - **Casualties:** After every battle the map mechanic emits `military:casualties-taken`. The military mechanic processes each entry: armies that survive retain their reduced strength; armies reduced to 0 are deleted and `military:army-destroyed` fires. Casualty rates are computed by the map mechanic based on battle intensity (how close the fight was). Winner armies lose 12–27%, loser armies lose 28–48% of their strength per battle.
+
+## Roadmap
+
+### 1. Supply lines & attrition (military ↔ map)
+
+Armies projected away from a contiguous chain of owned provinces should bleed strength over time, modeling stretched logistics.
+
+- Every `supplyCheckIntervalFrames`, military runs a per-army connectivity check: walk same-owner adjacent provinces from the army's current province and see if any owned-from-game-start "core" province is reachable. Reads adjacency and ownership from the shared map slice (no import).
+- First tick an army is unsupplied: emit `military:army-supply-cut`. Each subsequent tick: emit `military:army-attrition { armyId, strengthLost }` and reduce strength. Reaching 0 destroys the army through the existing casualty pipeline.
+- On reconnection: emit `military:army-supply-restored`. Armies recover strength at `supplyRecoveryRate` (a fraction of attrition losses) per frame, capped at original raised strength.
+- Composes with naval invasion (navy roadmap) — landed armies are "supplied" if their landing province connects to an owned chain or stays adjacent to a friendly fleet.
+- New config: `attritionPerFrameUnsupplied` (0.1), `supplyRecoveryRate`, `supplyCheckIntervalFrames` (30).
+- Contract additions: three new event keys (`army-supply-cut`, `army-supply-restored`, `army-attrition`).
+
+### Implementation order (suggested)
+
+1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.
 - Movement and army merging are out of scope for this implementation.

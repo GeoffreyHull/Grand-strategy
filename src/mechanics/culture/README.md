@@ -60,3 +60,23 @@ Each country has one native culture, derived deterministically from its `Country
 **Ocean provinces.** Excluded from the culture state — they cannot be owned and have no cultural identity.
 
 **Config.** `public/config/culture.json` can override any numeric field. Missing or invalid files fall back to `DEFAULT_CULTURE_CONFIG` with a console warning (handled by `main.ts`).
+
+## Roadmap
+
+### 1. Ideology conflict & syncretism (culture ↔ personality, ai)
+
+Cultures are currently identity-only — assimilation produces a clean conversion regardless of who is converting whom. Add a second axis: each culture has an `ideologyTag` (e.g. `theocratic`, `mercantile`, `martial`, `communal`). Conversions between divergent ideologies are violent; conversions between compatible ones are syncretic and beneficial.
+
+- Add `ideologyTag: IdeologyTag` per culture (config-driven map of `CultureId → IdeologyTag`).
+- On assimilation completion, branch on the tag pair:
+  - **Divergent** (e.g. `theocratic` ↔ `mercantile`) → emit `culture:ideology-conflict { provinceId, oldCultureId, newCultureId, oldIdeologyTag, newIdeologyTag, ownerId }` instead of (or alongside) `culture:province-converted`. Personality consumes this and writes a `religious-grievance` ledger entry from the old-culture nation toward the conqueror.
+  - **Compatible** (config `compatiblePairs` table) → emit `culture:syncretism-event { provinceId, cultureId, ideologyTag, ownerId }` and add a small `economy:province-modifier-added` income bonus (the trade-melting-pot effect).
+- During the assimilation process itself, divergent-ideology mismatches accumulate progress at `assimilationRatePerCycle × conflictAssimilationPenalty` (slower).
+- AI (once consuming culture state — see ai roadmap) uses ideology tags for ALLY scoring and EXPAND target selection: Zealot archetypes weight ideology-conflict targets up, Mercantile down.
+- New events: `culture:ideology-conflict`, `culture:syncretism-event`.
+- New config: `ideologyTags` (CultureId map), `compatiblePairs`, `syncretismIncomeBonus`, `conflictAssimilationPenalty`.
+- Contract additions: new `IdeologyTag` union in `contracts/mechanics/culture.ts`; two new event keys; `ProvinceCulture` gains optional `ideologyTag` field.
+
+### Implementation order (suggested)
+
+1. **Ideology conflict & syncretism** — biggest single addition to culture's depth. Land after the population-roadmap's culture-weighted assimilation so the demographic and ideological axes interact correctly.

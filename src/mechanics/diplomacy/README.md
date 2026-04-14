@@ -92,3 +92,23 @@ Only pairs with a non-neutral relation are stored. `getRelation` returns `null` 
 - **`canAttack` is the war gate**: any mechanic that initiates military aggression must call `canAttack(attackerId, targetId)` and abort if it returns `false`.
 - **AI response is immediate**: `main.ts` listens to `diplomacy:truce-requested` and, if the target is an AI country, calls `aiMechanic.evaluateTruceResponse()` synchronously before calling `respondToTruceRequest()`. Player-targeted requests remain pending until the player acts via UI.
 - **No cross-mechanic imports**: diplomacy does not import from military, map, or any other mechanic. Integration is done via events and direct method calls in `main.ts`.
+
+## Roadmap
+
+### 1. Casus belli system (diplomacy ↔ map, military, personality)
+
+Wars currently have no notion of justification. Add casus belli so unprovoked aggression carries diplomatic cost and legitimate war goals unlock fuller peace terms.
+
+- Diplomacy tracks per-pair CB entries with expiry: `{ holderId, targetId, cbType, expiresAtTurn }`.
+- CBs are granted by event triggers:
+  - `'reconquest'` — when a province held by `holderId` within the last N turns is currently owned by `targetId` (consume `map:province-conquered` history).
+  - `'defensive'` — written automatically when `diplomacy:war-declared` fires with `targetId` as the defender.
+  - `'border-incident'` — written when an enemy army enters a bordering province (future military hook).
+- `declareWar` accepts an optional `casusBelli: CasusBelliType | null`. If `null`, emit `diplomacy:war-declared` with `casusBelli: null` and apply a global opinion penalty (personality consumes this and writes hostility ledger entries from every observer nation).
+- A consumed CB is removed from state via `diplomacy:casus-belli-consumed`.
+- New config: `casusBelliExpiryTurns` (10), `noCBOpinionPenalty`, `cbTypes` table.
+- Contract additions: new `CasusBelliType` union in `contracts/mechanics/diplomacy.ts`; two new event keys (`casus-belli-gained`, `casus-belli-consumed`); `diplomacy:war-declared` payload extended with `casusBelli: CasusBelliType | null`.
+
+### Implementation order (suggested)
+
+1. **Casus belli** — start with `'defensive'` (auto-written) and `'reconquest'` (history-driven) only. Border-incident waits until the supply-lines / army-movement work in the military roadmap lands.

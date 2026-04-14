@@ -139,3 +139,23 @@ Camera state (`CameraState`) is pure UI state — it is **not** stored in `GameS
 - **Leaderboard panel:** `LeaderboardRenderer.ts` computes a score per country (`provinces × 1000 + militaryStrength + gold / 10`) and re-renders the `#leaderboard-list` DOM element whenever province counts, army strength, or gold changes. Countries with zero provinces are flagged as eliminated and sorted to the bottom. The panel is collapsible (CSS `.collapsed` toggle) via a click handler in `index.html`, matching the pattern used by the legend and combat log panels. The static column-header row lives outside `#leaderboard-list` so it is never cleared by `renderLeaderboard`.
 - **No `any` types.** Branded `ProvinceId`/`CountryId` string types catch ID mixups at compile time.
 - **War gate:** Province capture is only permitted when an active war exists between the attacker and defender. The mechanic maintains a local `activeWars: Set<string>` (keyed by sorted country ID pair) updated via `diplomacy:war-declared` / `diplomacy:peace-made` events. This avoids a direct import of the diplomacy mechanic while still enforcing the invariant. Combat candidates are pre-filtered to only active-war provinces before random selection — this ensures EXPAND actions are never wasted on truced or neutral neighbours (important once truces are in play). Because the map mechanic's `ai:decision-made` handler runs before `main.ts` declares war (registration order), a country must declare war in one tick and attack in a subsequent tick — matching realistic grand-strategy behavior.
+
+## Roadmap
+
+### 1. Fortifications & sieges (map ↔ buildings, military)
+
+Replace the flat `walls` defense bonus with a tiered fortification level (0–3) that requires a real siege duration to overcome. Discourages blitzes through fortified cores and gives walls/castles meaningful escalation.
+
+- Per-province `fortificationLevel: 0 | 1 | 2 | 3` derived from wall-tier buildings. `buildings:building-constructed` of type `walls` increments; `buildings:building-destroyed` decrements. Map emits `map:fortification-level-changed { provinceId, newLevel }` on transitions.
+- Combat resolution applies a per-tier defense multiplier (`fortificationDefenseMultiplier[level]`, e.g. `[1.0, 1.4, 1.9, 2.5]`) instead of the current flat `+60` walls bonus.
+- When an EXPAND target has `fortificationLevel > 0`, conquest is gated behind a siege:
+  - Map emits `map:siege-started { attackerCountryId, defenderCountryId, provinceId, siegeEndsAtFrame }` and refuses immediate conquest.
+  - Each frame the besieging army drains `siegeAttritionPerFrame` strength.
+  - At `siegeEndsAtFrame`, conquest proceeds via the normal `map:province-conquered` path.
+  - Siege lifts (without conquest) on attacker withdrawal, attacker destruction, or peace — emit `map:siege-lifted { reason }`.
+- New config: `fortificationDefenseMultiplier` array, `siegeDurationFramesByLevel` (e.g. `[0, 60, 120, 240]`), `siegeAttritionPerFrame`.
+- Contract additions: three new event keys; new `FortificationLevel` type (0 | 1 | 2 | 3) in `contracts/mechanics/map.ts`; province slice gains `fortificationLevel` and optional `activeSiege` fields.
+
+### Implementation order (suggested)
+
+1. **Fortifications & sieges** — biggest single addition to combat depth; design the siege state machine carefully so it composes with naval invasion (navy roadmap) and supply lines (military roadmap).

@@ -205,3 +205,25 @@ and zealots with a clear advantage almost always reject.
 The AI mechanic never imports from `src/mechanics/map/` or any other mechanic.
 State is read through `StateStore.getState()` (via `GameState`) and decisions
 are communicated via `ai:decision-made` events.
+
+## Roadmap
+
+### 1. AI scoring consumes personality bias (ai ↔ personality)
+
+The AI scores actions using only the hardcoded `AIPersonality` weight dials. The personality mechanic already maintains live `InvestmentBias` values shaped by lived experience (climate shocks, repeated wars, etc.) — but AI ignores them. Close the loop.
+
+- Extend `AIContext` with the personality slice: `personalityState: PersonalityState`.
+- Each scoring pass, look up the deciding nation's `getBias(state, countryId)` and apply the values to per-action additive modifiers via a `biasToActionWeightMap` config:
+  - `navalInvestmentUrgency` → `+FORTIFY` weight on coastal provinces, `−EXPAND` weight on landlocked targets.
+  - `defensiveUrge` → `+FORTIFY` and `+SEEK_PEACE` weights.
+  - `economicUrge` → `+RESEARCH` and `−EXPAND` weights.
+  - `religiousAggression` → `+EXPAND` weight against ideologically-different cultures (composes with the culture roadmap's ideology tags).
+- Cap total bias adjustment per action at `biasInfluenceCap` to prevent runaway dominance.
+- This makes nations that have *experienced* repeated naval shocks actually invest in the navy, not just carry a stat that nothing reads.
+- New event (debug/UI signal only): `ai:bias-incorporated { countryId, biasSnapshot }`.
+- New config: `biasToActionWeightMap`, `biasInfluenceCap`.
+- Contract additions: one new event key; `AIContext` extension documented in `contracts/mechanics/ai.ts`.
+
+### Implementation order (suggested)
+
+1. **Consume personality bias** — land *after* personality's "climate adaptation memory" roadmap item so doctrine shifts have somewhere to go. Without this, the personality state mutates but never affects play.

@@ -6,9 +6,9 @@ import type { AIPersonality, AIPersonalityArchetype } from '@contracts/mechanics
 // ── Archetype base stats ──────────────────────────────────────────────────────
 
 const ARCHETYPE_BASES: Readonly<Record<AIPersonalityArchetype, Omit<AIPersonality, 'archetype'>>> = {
-  conqueror:    { aggression: 0.8, diplomacy: 0.1, economy: 0.3, caution: 0.2 },
-  diplomat:     { aggression: 0.1, diplomacy: 0.8, economy: 0.4, caution: 0.3 },
-  merchant:     { aggression: 0.2, diplomacy: 0.5, economy: 0.8, caution: 0.4 },
+  expansionist: { aggression: 0.8, diplomacy: 0.1, economy: 0.3, caution: 0.2 },
+  hegemon:      { aggression: 0.4, diplomacy: 0.7, economy: 0.5, caution: 0.4 },
+  mercantile:   { aggression: 0.2, diplomacy: 0.5, economy: 0.8, caution: 0.4 },
   isolationist: { aggression: 0.2, diplomacy: 0.2, economy: 0.5, caution: 0.8 },
   zealot:       { aggression: 0.6, diplomacy: 0.2, economy: 0.3, caution: 0.3 },
 }
@@ -20,33 +20,33 @@ function personality(archetype: AIPersonalityArchetype): AIPersonality {
 // ── Per-nation assignments (keyed by CountryId string) ───────────────────────
 
 export const DEFAULT_PERSONALITIES: Readonly<Record<string, AIPersonality>> = {
-  // Conquerors — empire/kingdom/tribal military powers
-  kharrath: personality('conqueror'),    // Empire of Kharrath
-  valdorn:  personality('conqueror'),    // Kingdom of Valdorn
-  ulgrath:  personality('conqueror'),    // Ulgrath Tribes
+  // Expansionists — empire/kingdom/tribal military powers
+  kharrath: personality('expansionist'),  // Empire of Kharrath
+  valdorn:  personality('expansionist'),  // Kingdom of Valdorn
+  ulgrath:  personality('expansionist'),  // Ulgrath Tribes
 
   // Isolationists — dark/insular/mysterious factions
-  dravenn:  personality('isolationist'), // Dravenn Hegemony
-  durnrak:  personality('isolationist'), // Clanlands of Durnrak
-  wyrmfen:  personality('isolationist'), // Wyrmfen Conclave
+  dravenn:  personality('isolationist'),  // Dravenn Hegemony
+  durnrak:  personality('isolationist'),  // Clanlands of Durnrak
+  wyrmfen:  personality('isolationist'),  // Wyrmfen Conclave
 
-  // Diplomats — republics, confederations, alliances
-  solenne:  personality('diplomat'),     // Republic of Solenne
-  halvorn:  personality('diplomat'),     // Free Cities of Halvorn
-  ostmark:  personality('diplomat'),     // Ostmark Confederation
-  carath:   personality('diplomat'),     // Carath Alliance
+  // Hegemons — republics, confederations, alliances that watch for rising powers
+  solenne:  personality('hegemon'),       // Republic of Solenne
+  halvorn:  personality('hegemon'),       // Free Cities of Halvorn
+  ostmark:  personality('hegemon'),       // Ostmark Confederation
+  carath:   personality('hegemon'),       // Carath Alliance
 
-  // Merchants — trade-focused principalities and republics
-  auren:    personality('merchant'),     // Duchy of Auren
-  luminar:  personality('merchant'),     // Theocracy of Luminar
-  verath:   personality('merchant'),     // Principality of Verath
-  vyshan:   personality('merchant'),     // Vyshan Principality
-  norwind:  personality('merchant'),     // Norwind Republic
+  // Mercantile — trade-focused principalities and republics
+  auren:    personality('mercantile'),    // Duchy of Auren
+  luminar:  personality('mercantile'),    // Theocracy of Luminar
+  verath:   personality('mercantile'),    // Principality of Verath
+  vyshan:   personality('mercantile'),    // Vyshan Principality
+  norwind:  personality('mercantile'),    // Norwind Republic
 
   // Zealots — frontier, desert, and nature ideologues
-  thornwood: personality('zealot'),      // Thornwood Dominion
-  mireth:    personality('zealot'),      // Marchlands of Mireth
-  pelundra:  personality('zealot'),      // Pelundra Reach
-  zhardan:   personality('zealot'),      // Sultanate of Zhardan
-  serath:    personality('zealot'),      // Serath Emirates
+  thornwood: personality('zealot'),       // Thornwood Dominion
+  mireth:    personality('zealot'),       // Marchlands of Mireth
+  pelundra:  personality('zealot'),       // Pelundra Reach
+  zhardan:   personality('zealot'),       // Sultanate of Zhardan
+  serath:    personality('zealot'),       // Serath Emirates
 }

@@ -56,6 +56,17 @@ import {
   loadCultureConfig,
   DEFAULT_CULTURE_CONFIG,
 } from './mechanics/culture/index'
+import {
+  buildClimateState,
+  initClimateMechanic,
+  loadClimateConfig,
+  DEFAULT_CLIMATE_CONFIG,
+} from './mechanics/climate/index'
+import {
+  buildPersonalityState,
+  initPersonalityMechanic,
+} from './mechanics/personality/index'
+import type { AIPersonalityArchetype } from '@contracts/mechanics/ai'
 
 // ── Config loading ────────────────────────────────────────────────────────────
 
@@ -73,7 +84,7 @@ async function loadWithFallback<T>(loader: () => Promise<T>, fallback: T, name: 
   }
 }
 
-const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig, populationConfig, cultureConfig] = await Promise.all([
+const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyConfig, populationConfig, cultureConfig, climateConfig] = await Promise.all([
   loadWithFallback(loadMilitaryConfig,   DEFAULT_MILITARY_CONFIG,   'military'),
   loadWithFallback(loadNavyConfig,       DEFAULT_NAVY_CONFIG,       'navy'),
   loadWithFallback(loadBuildingsConfig,  DEFAULT_BUILDINGS_CONFIG,  'buildings'),
@@ -81,6 +92,7 @@ const [militaryConfig, navyConfig, buildingsConfig, technologyConfig, economyCon
   loadWithFallback(loadEconomyConfig,    DEFAULT_ECONOMY_CONFIG,    'economy'),
   loadWithFallback(loadPopulationConfig, DEFAULT_POPULATION_CONFIG, 'population'),
   loadWithFallback(loadCultureConfig,    DEFAULT_CULTURE_CONFIG,    'culture'),
+  loadWithFallback(loadClimateConfig,    DEFAULT_CLIMATE_CONFIG,    'climate'),
 ])
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -131,6 +143,13 @@ if (configWarnings.length > 0) {
 const eventBus   = new EventBus<EventMap>()
 const mapState   = buildMapState()
 const aiState    = buildAIState()
+
+// Personality mirrors each AI nation's archetype so trust and biases stay aligned.
+const archetypeByCountry: Record<string, AIPersonalityArchetype> = {}
+for (const [id, c] of Object.entries(aiState.countries)) {
+  archetypeByCountry[id] = c.personality.archetype
+}
+
 const stateStore = new StateStore<GameState>({
   map:          mapState,
   ai:           aiState,
@@ -143,6 +162,8 @@ const stateStore = new StateStore<GameState>({
   diplomacy:    buildDiplomacyState(),
   population:   buildPopulationState(),
   culture:      buildCultureState(),
+  climate:      buildClimateState(),
+  personality:  buildPersonalityState(archetypeByCountry),
 })
 const gameLoop = new GameLoop(20)
 
@@ -188,6 +209,16 @@ gameLoop.addUpdateSystem(populationMechanic.update)
 
 const cultureMechanic = initCultureMechanic(eventBus, stateStore, cultureConfig)
 gameLoop.addUpdateSystem(cultureMechanic.update)
+
+// ── Climate mechanic ──────────────────────────────────────────────────────────
+
+const climateMechanic = initClimateMechanic(eventBus, stateStore, climateConfig)
+gameLoop.addUpdateSystem(climateMechanic.update)
+
+// ── Personality mechanic ──────────────────────────────────────────────────────
+
+const personalityMechanic = initPersonalityMechanic(eventBus, stateStore)
+gameLoop.addUpdateSystem(personalityMechanic.update)
 
 // ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -281,10 +312,11 @@ eventBus.on('diplomacy:truce-requested', ({ requesterId, targetId }) => {
   if (targetState === undefined || targetState.isPlayerControlled) return
 
   const context: AIContext = {
-    mapState:        stateStore.getSlice('map'),
-    aiState:         stateStore.getSlice('ai'),
-    diplomacyState:  stateStore.getSlice('diplomacy'),
-    technologyState: stateStore.getSlice('technology'),
+    mapState:         stateStore.getSlice('map'),
+    aiState:          stateStore.getSlice('ai'),
+    diplomacyState:   stateStore.getSlice('diplomacy'),
+    technologyState:  stateStore.getSlice('technology'),
+    personalityState: stateStore.getSlice('personality'),
   }
   const accepts = aiMechanic.evaluateTruceResponse(requesterId, targetId, context)
   diplomacyMechanic.respondToTruceRequest(requesterId, targetId, accepts)

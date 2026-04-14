@@ -89,10 +89,11 @@ export function initAIMechanic(
     const { frame } = ctx
     const state = stateStore.getState()
     const context: AIContext = {
-      mapState:        state.map,
-      aiState:         state.ai,
-      diplomacyState:  state.diplomacy,
-      technologyState: state.technology,
+      mapState:         state.map,
+      aiState:          state.ai,
+      diplomacyState:   state.diplomacy,
+      technologyState:  state.technology,
+      personalityState: state.personality,
     }
 
     const changed = controller.update(frame, context)

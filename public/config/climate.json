@@ -1,0 +1,48 @@
+{
+  "rollIntervalTurns": 3,
+  "eventChancePerProvince": 0.25,
+  "events": [
+    {
+      "eventType": "drought",
+      "allowedTags": ["arid"],
+      "durationTurns": 4,
+      "weight": 1.0,
+      "effects": { "incomePct": -0.4 }
+    },
+    {
+      "eventType": "harsh-winter",
+      "allowedTags": ["northern"],
+      "durationTurns": 3,
+      "weight": 1.0,
+      "effects": { "attritionPct": 0.2 }
+    },
+    {
+      "eventType": "storm-season",
+      "allowedTags": ["coastal"],
+      "durationTurns": 3,
+      "weight": 1.0,
+      "effects": { "portIncomePct": -0.5, "blocksFleetMovement": true }
+    },
+    {
+      "eventType": "bumper-harvest",
+      "allowedTags": ["temperate"],
+      "durationTurns": 2,
+      "weight": 1.0,
+      "effects": { "incomePct": 0.3 }
+    },
+    {
+      "eventType": "epidemic",
+      "allowedTags": ["arid", "temperate", "northern", "coastal"],
+      "durationTurns": 5,
+      "weight": 0.35,
+      "effects": { "pausesPopulationGrowth": true, "unrestAdd": 15 }
+    },
+    {
+      "eventType": "mild-season",
+      "allowedTags": ["arid", "temperate", "northern", "coastal"],
+      "durationTurns": 2,
+      "weight": 0.6,
+      "effects": {}
+    }
+  ]
+}

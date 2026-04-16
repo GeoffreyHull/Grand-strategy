@@ -131,6 +131,18 @@ Armies themselves accumulate experience rather than tracking an abstract pool.
 - New config: `xpPerBattle`, `tierThresholds`, `tierCombatMultiplier`, `xpDecayPerFrame`.
 - Contract additions: `Army` gains `xp: number` and `tier: ArmyTier` fields; new `ArmyTier` enum.
 
+### 7. Unit tiers: militia / regular / elite (military ↔ economy, population)
+
+At recruitment time, choose a quality tier. Each has different costs, recruit times, and strengths.
+
+- `requestBuildArmy(..., tier: 'militia' | 'regular' | 'elite')`. Default stays `regular` for backward compat.
+- Militia: cheap, fast, weak, drawn from local pop hit (no gold refund on disband).
+- Regular: current behavior — moderate gold, moderate strength.
+- Elite: high gold + requires a Military Academy in the province + slow recruit time, but high base strength.
+- Emit `military:army-raised` with the tier in payload.
+- New config: per-tier `cost`, `durationFrames`, `baseStrength`.
+- Contract additions: `Army` gains `unitTier: UnitTier` field; new `UnitTier` union. (Note: distinct from the XP-based `tier` field in item #6 — name one of them differently when both land.)
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

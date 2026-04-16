@@ -109,6 +109,16 @@ Let players (and AI) disband armies in peacetime to recover population instead o
 - New events: `military:army-disbanded`, `personality:desertion-stain` (consumed by personality).
 - New config: `disbandPopReturnFraction`, `disbandGoldRefundFraction`.
 
+### 5. Military Academy building (military ↔ buildings)
+
+A province-level building that improves armies raised in it.
+
+- New building type `military-academy`. Buildings mechanic already handles construction/cost.
+- Any army raised in a province with a military academy gets `+academyStrengthBonus` (default +20) on top of the barracks bonus. Stackable with barracks.
+- Optional: armies garrisoned in a province with an academy slowly recover strength at `academyHealPerFrame` (passive training).
+- New config: `academyStrengthBonus`, `academyHealPerFrame`.
+- Contract additions: new building type key; no new event keys required.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

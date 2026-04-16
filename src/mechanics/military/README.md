@@ -143,6 +143,22 @@ At recruitment time, choose a quality tier. Each has different costs, recruit ti
 - New config: per-tier `cost`, `durationFrames`, `baseStrength`.
 - Contract additions: `Army` gains `unitTier: UnitTier` field; new `UnitTier` union. (Note: distinct from the XP-based `tier` field in item #6 — name one of them differently when both land.)
 
+### 8. Cavalry vs infantry composition (military ↔ map)
+
+Introduce a second army dimension — the mix of cavalry and infantry — that interacts with terrain. Composes with unit tiers (#7): a militia, regular, or elite can each be infantry-heavy or cavalry-heavy.
+
+- `Army` gains `cavalryRatio: 0–1` (set at recruit time, default 0.2).
+- `requestBuildArmy` signature extends to accept `cavalryRatio` alongside `unitTier`. Final cost = `unitTier.cost × (1 + cavalryRatio × (cavalryCostMultiplier − 1))` so the two axes multiply cleanly.
+- Combat multiplier depends on terrain × cavalry ratio:
+  - Plains: `1.0 + cavalryRatio × 0.4` (cavalry favored).
+  - Hills/Forest: `1.0 − cavalryRatio × 0.3` (cavalry hindered).
+  - Mountains: `1.0 − cavalryRatio × 0.5`.
+- New `stable` building gates cavalry recruitment above 0.5 ratio, independent of the Military Academy gate for elite tier — a province can have either, both, or neither.
+- Militia tier caps `cavalryRatio` at 0.2 (conscripts can't field real cavalry); elite tier uncaps up to 1.0.
+- New events: none required (ratio is a static army property).
+- New config: `cavalryCostMultiplier`, `cavalryTerrainMultipliers`, per-tier `maxCavalryRatio`.
+- Contract additions: `Army` gains `cavalryRatio` field; new `stable` building type.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

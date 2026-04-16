@@ -211,6 +211,26 @@ Let defenders invest time in a terrain-specific defense bonus.
 - New config: `entrenchPerFrame`, `terrainEntrenchMax`, `entrenchDrainPerBattle`.
 - Contract additions: `Army` gains `entrenchment` field.
 
+### 13. Unit types: infantry / cavalry / siege (military ↔ buildings, map)
+
+Generalize the cavalry idea from #8 into a full three-way composition, tracked as actual soldier counts rather than ratios.
+
+- Replace `Army.strength: number` + `Army.cavalryRatio: number` (#8) with `Army.composition: { infantry: number, cavalry: number, siege: number }`. The total `strength` is a derived sum.
+- Recruit-time cost = per-type cost summed: `infantry × infantryCost + cavalry × cavalryCost + siege × siegeCost`. Siege is the most expensive, cavalry ≈ 1.5× infantry.
+- Combat role per type:
+  - **Infantry**: baseline. No terrain modifiers, no special properties.
+  - **Cavalry**: terrain-sensitive (plains good, mountains/forest bad), drives pursuit damage (#19 if adopted).
+  - **Siege**: near-useless in open combat (multiplier 0.5 on that type's contribution), but halves siege duration against fortified provinces and reduces fortification defense multiplier by 1 tier.
+- Building gates:
+  - `stable` unlocks cavalry recruitment (from #8).
+  - `siege-workshop` (new) unlocks siege recruitment.
+- Battle losses are applied proportionally across all three types — if an army takes 40% casualties, each count drops ~40%. Exact distribution rule (flat % vs weighted toward the front-line type) is a **TODO**.
+- Replenishment (via barracks/academy/supply) buys back counts of each type at the current per-type cost.
+- New config: per-type `cost`, `openCombatMultiplier`, `terrainModifiers` table, `siegeDurationMultiplier`, `siegeFortDebuff`.
+- Contract additions: `Army.composition: UnitComposition` (replaces `strength` and `cavalryRatio` from #8); new `siege-workshop` building type.
+
+Note: if #13 lands, integrate with #8 — the `cavalryRatio` field is superseded by explicit cavalry counts. Existing barracks/military-academy strength bonuses are applied at raise time to the composition (e.g. +25 distributed proportionally, or only to infantry — **TODO** decide).
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

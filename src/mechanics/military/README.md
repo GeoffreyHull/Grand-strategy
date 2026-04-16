@@ -89,6 +89,16 @@ Extend the supply chain beyond "own-province reachability" — let players pre-p
 - New events: `military:depot-lost`, `military:depot-established` (fires when buildings reports a depot finished).
 - New config: `depotSupplyRadius` (2), `depotUpkeepPerFrame`.
 
+### 3. Army fatigue & march speed (military ↔ map)
+
+Armies shouldn't teleport for free. Add an invisible fatigue meter that rises with repeated movement/combat and falls while stationary.
+
+- Per-army `fatigue: 0–100`. Each movement or battle adds configured amounts. Stationary army decays toward 0 at `fatigueRecoveryPerFrame`.
+- Combat resolution reads attacker and defender fatigue; >60 applies a combat multiplier penalty (`fatigueCombatPenalty`).
+- Emit `military:army-exhausted { armyId }` at threshold; `military:army-rested { armyId }` on recovery.
+- New config: `fatigueGainPerMove`, `fatigueGainPerBattle`, `fatigueRecoveryPerFrame`, `fatigueCombatPenalty`, `fatigueExhaustionThreshold`.
+- Contract additions: two new event keys; `Army` gains `fatigue` field.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

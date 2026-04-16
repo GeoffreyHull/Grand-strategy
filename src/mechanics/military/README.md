@@ -175,6 +175,30 @@ Instead of per-army tech leaks, each country picks a single active "doctrine" th
 - New config: `doctrineCooldownFrames`, per-doctrine modifier tables.
 - Contract additions: one new event key; `Doctrine` union.
 
+### 10. Rebels as a first-class faction (military ↔ map, population, diplomacy)
+
+Introduce rebel forces as non-state armies that can occupy, fight, and be negotiated with. Opens up civil-war scenarios, uprisings in newly-conquered provinces, and post-defeat holdouts.
+
+- **TODO — flesh out**: what spawns rebels (low-happiness provinces, mutinies, disbanded armies refusing to go home, cultural-mismatch revolts, etc.)? Do they have a "country" ID or a special reserved one? Do they share borders/capture provinces like a nation, or only contest them? Can they be bribed / co-opted via diplomacy? How are they rendered on the map (color? icon?)? Do they use the same combat pipeline as national armies?
+- Likely contract additions: a reserved `CountryId` for rebels, or a parallel `RebelFaction` entity with its own slice.
+- Likely new events: `military:rebels-spawned`, `military:rebels-defeated`, `map:province-rebel-occupied`.
+- Design constraint: must not break the existing `activeWars` pair-keyed set in map — rebels need a simpler "everyone at war with them" rule, or they participate via a special marker.
+
+### 11. Dissatisfaction with standing armies in peacetime (military ↔ economy, personality, population)
+
+A country that keeps a large army around with no active war should pay some political/economic cost. Standing force ≠ free force.
+
+- **TODO — flesh out**: what does the cost look like? Options:
+  - Rising unrest in provinces hosting idle armies (population mechanic).
+  - A per-army "unused" ledger entry from the hosting province toward the country's leadership (personality).
+  - Escalating upkeep over time (economy) — the longer an army sits idle, the more expensive it gets.
+  - A combination of the above.
+- What counts as "peacetime"? No active wars at all, or no active wars involving this specific country?
+- Does the penalty differ by unit tier (#7) — are elite armies more expensive to keep idle than militia, or less?
+- How does this interact with a country that mothballs armies on purpose for defense? Does a Defensive Doctrine (#9) reduce the penalty?
+- Likely new events: `military:army-idle`, `military:idle-cost-applied`.
+- Likely new config: `peacetimeIdleThresholdFrames`, `peacetimeCostPerFrame`.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

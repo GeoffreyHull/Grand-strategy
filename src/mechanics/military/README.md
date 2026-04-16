@@ -119,6 +119,18 @@ A province-level building that improves armies raised in it.
 - New config: `academyStrengthBonus`, `academyHealPerFrame`.
 - Contract additions: new building type key; no new event keys required.
 
+### 6. Army XP & tiers (military)
+
+Armies themselves accumulate experience rather than tracking an abstract pool.
+
+- Per-army `xp: number` (starts at 0). Each survived battle adds `xpPerBattle` (scaled by battle intensity). XP thresholds unlock tiers: Green → Seasoned → Veteran → Elite.
+- Each tier grants a multiplicative combat bonus (`tierCombatMultiplier[tier]`, e.g. `[1.0, 1.1, 1.25, 1.45]`).
+- XP decays slowly during peacetime garrisoning (`xpDecayPerFrame`) — use it or lose it.
+- Emit `military:army-tier-up { armyId, newTier }` on threshold crossings.
+- New events: `military:army-tier-up`.
+- New config: `xpPerBattle`, `tierThresholds`, `tierCombatMultiplier`, `xpDecayPerFrame`.
+- Contract additions: `Army` gains `xp: number` and `tier: ArmyTier` fields; new `ArmyTier` enum.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

@@ -199,6 +199,18 @@ A country that keeps a large army around with no active war should pay some poli
 - Likely new events: `military:army-idle`, `military:idle-cost-applied`.
 - Likely new config: `peacetimeIdleThresholdFrames`, `peacetimeCostPerFrame`.
 
+### 12. Mountain entrenchment (military ↔ map)
+
+Let defenders invest time in a terrain-specific defense bonus.
+
+- Per-army `entrenchment: 0–100`. Rises at `entrenchPerFrame` while stationary in a mountain or hills province (also forests, half rate). Resets to 0 on move.
+- Combat defense multiplier = `1 + entrenchment / 100 × terrainEntrenchMax[terrain]` (mountains max 0.8, hills 0.5, forest 0.3).
+- Attackers drain defender entrenchment each battle (`entrenchDrainPerBattle`, default 30).
+- Emit `military:army-entrenched { armyId, level }` at 25/50/75/100 thresholds.
+- New events: `military:army-entrenched`.
+- New config: `entrenchPerFrame`, `terrainEntrenchMax`, `entrenchDrainPerBattle`.
+- Contract additions: `Army` gains `entrenchment` field.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

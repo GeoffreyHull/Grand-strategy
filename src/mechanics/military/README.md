@@ -99,6 +99,16 @@ Armies shouldn't teleport for free. Add an invisible fatigue meter that rises wi
 - New config: `fatigueGainPerMove`, `fatigueGainPerBattle`, `fatigueRecoveryPerFrame`, `fatigueCombatPenalty`, `fatigueExhaustionThreshold`.
 - Contract additions: two new event keys; `Army` gains `fatigue` field.
 
+### 4. Demobilization waves (military ↔ population, economy)
+
+Let players (and AI) disband armies in peacetime to recover population instead of paying upkeep indefinitely.
+
+- New action: `disbandArmy(armyId)` — emits `military:army-disbanded { armyId, countryId, provinceId, strengthReturned }`. Population mechanic adds a fraction back as pop; economy refunds a fraction of construction cost.
+- AI ISOLATE action unlocks disbanding of overbudget armies.
+- Disbanding during wartime triggers a `personality:desertion-stain` ledger entry (nations remember their leaders caving).
+- New events: `military:army-disbanded`, `personality:desertion-stain` (consumed by personality).
+- New config: `disbandPopReturnFraction`, `disbandGoldRefundFraction`.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

@@ -159,6 +159,22 @@ Introduce a second army dimension — the mix of cavalry and infantry — that i
 - New config: `cavalryCostMultiplier`, `cavalryTerrainMultipliers`, per-tier `maxCavalryRatio`.
 - Contract additions: `Army` gains `cavalryRatio` field; new `stable` building type.
 
+### 9. Country-wide doctrine tier (military)
+
+Instead of per-army tech leaks, each country picks a single active "doctrine" that biases all their armies — a commitment choice, not a research one.
+
+- New state: `MilitaryState.doctrine: Record<CountryId, Doctrine | null>`.
+- Doctrines (pick one at a time, switchable with a cooldown):
+  - **Shock Doctrine**: +15% combat strength in attack, −10% in defense.
+  - **Defensive Doctrine**: +20% combat strength in defense, −5% in attack.
+  - **Attrition Doctrine**: armies recover strength 2× faster in own territory, −10% combat strength.
+  - **Mobile Doctrine**: +0.2 effective cavalry ratio regardless of actual mix, +10% fatigue gain.
+- Switching emits `military:doctrine-changed { countryId, oldDoctrine, newDoctrine }`. Cooldown prevents thrashing.
+- AI personality biases the default choice (expansionist → Shock, isolationist → Defensive, mercantile → Attrition, zealot → Shock).
+- New events: `military:doctrine-changed`.
+- New config: `doctrineCooldownFrames`, per-doctrine modifier tables.
+- Contract additions: one new event key; `Doctrine` union.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

@@ -64,6 +64,8 @@ interface Army {
 
 ## Roadmap
 
+> **Design note — Supply as a future mechanic.** Items #1 and #2 below are written as extensions of the military mechanic, but the supply system may eventually be extracted into its own top-level mechanic (`src/mechanics/supply/`). When that split happens, military will emit the "army needs supply" signal and the supply mechanic will own the connectivity walk, depot state, and attrition bookkeeping. Similarly, these items currently treat supply as a binary connected/disconnected flag; a future iteration may introduce **specific goods** (grain, iron, fodder, etc.) that armies consume and depots stockpile — not committed, but leave the door open when naming fields and events.
+
 ### 1. Supply lines & attrition (military ↔ map)
 
 Armies projected away from a contiguous chain of owned provinces should bleed strength over time, modeling stretched logistics.
@@ -74,6 +76,18 @@ Armies projected away from a contiguous chain of owned provinces should bleed st
 - Composes with naval invasion (navy roadmap) — landed armies are "supplied" if their landing province connects to an owned chain or stays adjacent to a friendly fleet.
 - New config: `attritionPerFrameUnsupplied` (0.1), `supplyRecoveryRate`, `supplyCheckIntervalFrames` (30).
 - Contract additions: three new event keys (`army-supply-cut`, `army-supply-restored`, `army-attrition`).
+
+### 2. Supply depots & forward bases (military ↔ buildings, economy)
+
+Extend the supply chain beyond "own-province reachability" — let players pre-position logistics. A depot in a frontier province counts as a virtual core for supply checks within a radius.
+
+- New building type `supply-depot` (gold cost, construction-time same pipeline). Buildings mechanic already handles construction; military reads the buildings slice to enumerate depots.
+- Supply check walks up to `depotSupplyRadius` provinces from any depot owned by the army's country, in addition to native cores.
+- Depots consume gold per turn (`depotUpkeepPerFrame`). Emit `economy:gold-deducted { reason: 'depot-upkeep' }`.
+- Enemy conquest of a depot province destroys it and emits `military:depot-lost { provinceId, ownerId }`. Sudden loss can cascade-cut supply for multiple armies in one tick.
+- If supply is promoted to its own mechanic (see roadmap design note), depot state moves with it. If specific goods are later introduced, depots become the natural stockpile object — keep payload field naming generic enough to extend (`depotContents` reserved for future use).
+- New events: `military:depot-lost`, `military:depot-established` (fires when buildings reports a depot finished).
+- New config: `depotSupplyRadius` (2), `depotUpkeepPerFrame`.
 
 ### Implementation order (suggested)
 

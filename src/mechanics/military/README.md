@@ -231,6 +231,22 @@ Generalize the cavalry idea from #8 into a full three-way composition, tracked a
 
 Note: if #13 lands, integrate with #8 — the `cavalryRatio` field is superseded by explicit cavalry counts. Existing barracks/military-academy strength bonuses are applied at raise time to the composition (e.g. +25 distributed proportionally, or only to infantry — **TODO** decide).
 
+### 14. Rivers, fords, & bridges (military ↔ map)
+
+Rivers as tactical obstacles — but exactly how they work needs design work before implementation.
+
+> **Refinement needed before implementing.** The core idea is solid but the crossing model is unsettled. Key open question: are rivers **crossable anywhere with a penalty** (simple, always possible, just expensive) or **impassable unless a natural ford or bridge is present** (harder, creates real chokepoints and strategic map geometry)? The second option makes rivers far more meaningful but requires per-edge data for fords AND bridges plus pathing rules for how an army actually navigates them. It also raises edge cases: what if a river has no ford or bridge anywhere (island-like pocket)? Can boats substitute once navy is in play? Is a bridge a per-edge building or a per-province building that applies to all river edges of the province?
+
+- Rough sketch (subject to refinement above):
+  - Map data grows a per-edge `isRiver: boolean` and optionally `hasFord: boolean`.
+  - New `bridge` building type built at an edge. A bridge on either side of a river edge allows crossing.
+  - In the "crossable-with-penalty" model: attacking across an unforded/unbridged river applies `riverCrossingMultiplier` (default 0.7×) to the attacker.
+  - In the "impassable" model: armies simply cannot move across a river edge without a ford or bridge; attacks are refused with a clearer rejection event.
+  - Scorched earth: an owner withdrawing can spend gold to destroy their own bridge. Emit `map:bridge-destroyed`.
+- New events: `map:bridge-built`, `map:bridge-destroyed`, possibly `military:river-crossing-blocked` in the impassable model.
+- New config: `riverCrossingMultiplier` (penalty model) OR nothing movement-wise in the impassable model, `bridgeCost`, `bridgeDemolitionCost`.
+- Contract additions: per-edge river/ford data in map state; new `bridge` building type.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

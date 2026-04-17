@@ -383,6 +383,21 @@ Introduce a basic espionage action: spend gold to send a spy to an enemy provinc
 - New config: `spyCost`, `spyTravelFrames`, `spySuccessChance`, `sabotageDisableDuration`, `spyGoldStolen`.
 - Contract additions: three new event keys.
 
+### 25. Pillaging conquered provinces (military ↔ economy, map, personality)
+
+When a province is conquered, the victor can choose to pillage it — extracting immediate gold at the cost of wrecking the province's economy.
+
+- On `map:province-conquered`, the conqueror may emit `military:pillage { provinceId, countryId }`. Immediate gold payout (`pillageGoldAmount`), but the province gets a long-duration economy modifier (`pillage-devastation`: −50% income for `devastationDurationFrames`).
+- Pillaged provinces also lose population (`pillagePopLoss`).
+- Personality: every nation writes a `−25 brutality` ledger entry toward the pillager. Zealot archetypes write `−35`.
+- AI expansionist/zealot archetypes pillage by default; mercantile/hegemon never do (they want the province productive).
+- Composes with martial legacy (#17) — pillaging adds a "sacked <provinceName>" entry to the historical record.
+- New events: `military:pillage`, `military:province-devastated`.
+- New config: `pillageGoldAmount`, `pillagePopLoss`, `devastationIncomeMultiplier`, `devastationDurationFrames`.
+- Contract additions: two new event keys.
+
+> **Revisit before implementing.** The core idea is solid but details need work: is pillaging automatic or a player/AI choice? If a choice, what's the UI for the player and the decision logic for AI? Should the devastation be a flat penalty or scale with army size? Can you pillage the same province twice? How does this interact with culture assimilation (pillaged provinces should resist conversion harder)? Does the defending population fight back (composing with levies #23)?
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

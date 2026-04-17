@@ -64,7 +64,11 @@ interface Army {
 
 ## Roadmap
 
+26 cross-mechanic ideas organized by theme. Item #1 (Supply lines) is the intended implementation entry point; many later items compose with it. Each entry is terse by design — design specifics are flesh-out work for the implementer.
+
 > **Design note — Supply as a future mechanic.** Items #1 and #2 below are written as extensions of the military mechanic, but the supply system may eventually be extracted into its own top-level mechanic (`src/mechanics/supply/`). When that split happens, military will emit the "army needs supply" signal and the supply mechanic will own the connectivity walk, depot state, and attrition bookkeeping. Similarly, these items currently treat supply as a binary connected/disconnected flag; a future iteration may introduce **specific goods** (grain, iron, fodder, etc.) that armies consume and depots stockpile — not committed, but leave the door open when naming fields and events.
+
+> **Future theme — Misinformation.** Propaganda, false casualty reports, army decoys, and false victory claims were explored during ideation and deferred. Misinformation deserves its own cohesive mechanic rather than being bolted onto military piecemeal. Revisit when an intelligence/espionage mechanic is designed.
 
 ### 1. Supply lines & attrition (military ↔ map)
 
@@ -413,5 +417,22 @@ When a nation is clearly losing, allow a formal surrender that's better than fig
 
 ### Implementation order (suggested)
 
-1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.
-- Movement and army merging are out of scope for this implementation.
+1. **Supply lines & attrition (#1)** — the connectivity check is the foundational piece; everything supply-related (#2) builds on it.
+2. **Army XP & tiers (#6) + Unit tiers (#7)** — defines the army identity model that many later items read from.
+3. **Unit types: infantry / cavalry / siege (#13)** — replaces strength with composition; integrates with #8. Land before combat-modifying items.
+4. **Mountain entrenchment (#12)** — simple, self-contained, enriches combat immediately.
+5. **Country-wide doctrine (#9)** — lightweight state, big behavioral impact.
+6. **Wall-derived fortress garrisons (#22) + Population-drafted levies (#23)** — defensive pair, independent of each other but complement well.
+7. **Named battles (#15) + Martial legacy (#17) + War monuments (#18)** — narrative trio; #15 first (produces the data), then #17 (stores it), then #18 (celebrates it).
+8. **Army fatigue (#3)** — adds movement/combat cost; benefits from unit types being settled.
+9. **War weariness (#19) + AI strategic focus (#16)** — AI behavior pair; weariness feeds into focus decisions.
+10. **Logistical overstretch (#20)** — simple cap mechanic, land after army count stabilizes from other features.
+11. **Demobilization waves (#4)** — peacetime pressure release valve; pairs with standing-army dissatisfaction (#11).
+12. **Military Academy (#5)** — building integration, straightforward.
+13. **Spies & sabotage (#24)** — first intelligence feature; scouting lives here too.
+14. **Negotiated surrender (#26) + Pillaging (#25)** — end-of-war mechanics; land after core combat is mature.
+15. **Supply depots (#2)** — extends supply lines; land after #1 is proven.
+16. **Cavalry composition (#8)** — superseded by #13 if both land; implement only if #13 is deferred.
+17. **Religious schism desertion (#21)** — niche, needs culture mechanic maturity.
+18. **Rivers, fords, & bridges (#14)** — significant map data addition; needs design refinement first.
+19. **Rebels (#10) + Standing-army dissatisfaction (#11)** — both need design work (marked TODO); land last.

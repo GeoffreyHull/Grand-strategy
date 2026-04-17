@@ -293,6 +293,19 @@ Countries accumulate a living military history — not as a stat modifier, but a
 
 > **Not a modifier.** Resist the temptation to turn this into "+X% combat strength for high legacy." The value is in AI reasoning and narrative richness, not numerical bonuses. If bonuses are ever added, they should be a separate roadmap item with explicit justification.
 
+### 18. War monuments & victory parades (military ↔ buildings, personality)
+
+After winning a war, the victor can build a monument in the province where a named battle (#15) occurred — a permanent visible marker on the map and a thorn in the loser's side.
+
+- New building type `war-monument` — can only be built in a province where a named battle happened and the builder won. Costs gold, no construction time (instant, ceremonial).
+- Monuments are purely narrative/UI: they appear on the map, show the battle's story on hover (pulling from the named battle's detail payload), and feed into the martial legacy record (#17).
+- Personality: all nations that *lost* that battle write a `−15 grievance` ledger entry when the monument is built (salt in the wound). Zealot archetypes feel this as `−25`.
+- Multiple monuments in the same province stack visually — a province that saw three decisive victories becomes a memorial ground.
+- Composes with culture mechanic: monuments in foreign-culture provinces slow assimilation (the locals resent the trophy) — or accelerate it (the victors impose their narrative). **TODO** decide which.
+- New events: `military:monument-erected { provinceId, battleId, countryId }`.
+- New config: `monumentCost`.
+- Contract additions: one new event key; new `war-monument` building type.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

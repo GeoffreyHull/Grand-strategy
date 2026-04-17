@@ -345,6 +345,18 @@ If a nation conquers enough foreign-culture provinces, its armies stationed in t
 - New events: `military:schism-desertion`.
 - New config: `schismDesertionChance`, `schismStrengthLoss`, `schismForeignProvinceRatioThreshold`.
 
+### 22. Wall-derived fortress garrisons (military ↔ buildings, map)
+
+Provinces with walls automatically generate a small defensive garrison — not a full army, but a speed bump that attackers must overcome before conquering.
+
+- Any province with a `walls` building gets a `garrison: number` (derived from fortification level if map roadmap #1 lands, else flat `garrisonStrength` default 30).
+- Garrisons are NOT armies — they don't appear in `MilitaryState.armies`, can't move, can't attack. They only add to the province's defense during combat resolution.
+- Garrisons regenerate to full between attacks at `garrisonRegenPerFrame`.
+- If the province is conquered, the garrison is destroyed. It rebuilds when/if the province is recaptured and still has walls.
+- New events: `military:garrison-destroyed { provinceId }`, `military:garrison-restored { provinceId }`.
+- New config: `garrisonStrength`, `garrisonRegenPerFrame`, per-fortification-level garrison values.
+- Contract additions: two new event keys; province-level garrison data (could live in map or military slice — **TODO** decide).
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

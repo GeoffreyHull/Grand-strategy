@@ -335,6 +335,16 @@ The more armies a country fields, the less effective each one becomes — dimini
 
 > **Revisit post-implementation.** This is a deliberately simple first pass. Future iterations should consider: per-front overstretch (5 armies on one front is worse than 5 spread across three), supply-line interaction (#1 — unsupplied armies count double toward overstretch), technology reducing the threshold (better comms tech = more armies manageable), and personality-driven tolerance (expansionist archetypes handle more armies before penalty kicks in). Keep this note after implementation as a reminder.
 
+### 21. Religious schism desertion (military ↔ culture, population)
+
+If a nation conquers enough foreign-culture provinces, its armies stationed in those provinces risk losing troops to religious/cultural defection.
+
+- Per-army tick: if stationed in a province whose culture differs from the army's owner AND the owner holds more foreign-culture provinces than own-culture provinces, roll `schismDesertionChance`.
+- On desertion: strength loss + emit `military:schism-desertion { armyId, provinceId, strengthLost }`. Personality writes a `religious-grievance` entry.
+- Composes with culture assimilation — once the province converts, the risk disappears.
+- New events: `military:schism-desertion`.
+- New config: `schismDesertionChance`, `schismStrengthLoss`, `schismForeignProvinceRatioThreshold`.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

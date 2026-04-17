@@ -306,6 +306,21 @@ After winning a war, the victor can build a monument in the province where a nam
 - New config: `monumentCost`.
 - Contract additions: one new event key; new `war-monument` building type.
 
+### 19. War weariness (military ↔ ai, diplomacy)
+
+A country-level exhaustion meter that rises the longer a war drags on. For now, its only mechanical effect is boosting the AI's desire for peace.
+
+- Per-country `warWeariness: number` (starts 0). Rises each frame a country is at war. Accelerates with: army losses, named battle defeats (#15), multiple simultaneous wars.
+- Resets to 0 on peace. Drops slowly if only one war remains (consolidation relief).
+- **Current scope:** War weariness is fed into the AI's SEEK_PEACE scoring as an additive bonus: `weariness / 100 × wearinessPeaceWeight`. High weariness makes even aggressive archetypes willing to negotiate. This is the only gameplay effect for now.
+- Emit `military:war-weariness-changed { countryId, newWeariness }` each time the value crosses a 25-point threshold (for UI/debug).
+- Diplomacy composes: enemies can read your approximate weariness and hold out for better terms.
+- New events: `military:war-weariness-changed`.
+- New config: `wearinessGainPerFrame`, `wearinessAcceleratorPerLoss`, `wearinessPeaceWeight`.
+- Contract additions: `MilitaryState` gains `warWeariness: Record<CountryId, number>`; one new event key.
+
+> **Future expansion.** War weariness is intentionally scoped to AI peace desire only. Later iterations could add: recruitment cost increases at high weariness, desertion cascades, population unrest, and player-facing UI pressure. Each would be a separate roadmap item.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

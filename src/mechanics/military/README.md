@@ -247,6 +247,20 @@ Rivers as tactical obstacles — but exactly how they work needs design work bef
 - New config: `riverCrossingMultiplier` (penalty model) OR nothing movement-wise in the impassable model, `bridgeCost`, `bridgeDemolitionCost`.
 - Contract additions: per-edge river/ford data in map state; new `bridge` building type.
 
+### 15. Named battles & turning points (military ↔ personality, events-system)
+
+Give large, decisive engagements a name and a historical record — inspired by Dwarf Fortress's approach to artifact histories where items carry the date, name, and backstory of their creation.
+
+- After each battle, if `combinedStrength > namedBattleThreshold` AND `winMargin > 0.3`, generate a named battle record. Naming is deterministic: "Battle of <provinceName>" with a suffix for repeats ("Second Battle of Stormfell"). Emit `military:named-battle { battleId, name, winnerId, loserId, provinceId, frame, details }`.
+- The `details` payload captures the story: attacker/defender country names, army sizes, terrain, doctrine (#9), unit composition (#13), which side was entrenched (#12), whether cavalry was decisive, and the final strength delta. Enough data for a rich narrative tooltip or log entry.
+- Store a persistent list of named battles in state (`MilitaryState.notableBattles`), not a ring buffer — history doesn't forget. Optional config to archive old entries to a separate store if the list grows too large.
+- Personality ledger entries reference named battles in their metadata — a `-40 aggression` entry becomes "remembered for the Battle of Stormfell" in UI tooltips.
+- Combat log panel prefers the named-battle text over the generic description.
+- Future extension: named battles could be referenced by war monuments (#28 if adopted), AI decision-making (avoid attacking provinces where you lost a named battle recently), and diplomacy (leverage in peace negotiations — "we won the Battle of X").
+- New events: `military:named-battle`.
+- New config: `namedBattleThreshold`, `namedBattleMarginThreshold`.
+- Contract additions: one new event key; `MilitaryState.notableBattles: readonly NamedBattle[]`; `NamedBattle` interface with full detail fields.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

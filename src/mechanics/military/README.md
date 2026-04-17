@@ -398,6 +398,19 @@ When a province is conquered, the victor can choose to pillage it — extracting
 
 > **Revisit before implementing.** The core idea is solid but details need work: is pillaging automatic or a player/AI choice? If a choice, what's the UI for the player and the decision logic for AI? Should the devastation be a flat penalty or scale with army size? Can you pillage the same province twice? How does this interact with culture assimilation (pillaged provinces should resist conversion harder)? Does the defending population fight back (composing with levies #23)?
 
+### 26. Negotiated surrender & safe passage (military ↔ diplomacy)
+
+When a nation is clearly losing, allow a formal surrender that's better than fighting to the last province — cede territory in exchange for survival.
+
+- New diplomatic action: `offerSurrender(loserId, winnerId, provincesToCede[])`. The loser proposes giving up specific provinces in exchange for immediate peace.
+- AI evaluates based on personality: expansionists demand more provinces, diplomats accept fair offers, zealots demand total capitulation.
+- Accepted: provinces transfer without combat, peace is made, personality writes `+10 pragmatism` entries both ways.
+- Rejected: war continues, but the rejected offer is recorded in martial legacy (#17).
+- Safe passage clause: surrendering nation's armies in ceded provinces get one tick to "retreat" to an owned province before being destroyed.
+- New events: `diplomacy:surrender-offered`, `diplomacy:surrender-accepted`, `diplomacy:surrender-rejected`.
+- New config: `surrenderMinProvincesRatio` (minimum % of contested provinces the winner demands).
+- Contract additions: three new event keys.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

@@ -275,6 +275,24 @@ Give AI nations a single priority enemy per decision cycle so attacks concentrat
 
 > **Future AI refinement.** This is a first step toward smarter AI — the scoring is still one-dimensional (pick one enemy). Later iterations should consider multi-front coordination (hold one front defensively while pushing another), army positioning awareness (prefer targets where you have troops nearby), alliance coordination (focus on the same enemy your ally is fighting), and long-term strategic planning (weaken a rival's economy before attacking). Each of these is a separate roadmap item when the base focus system is proven.
 
+### 17. Martial legacy (military ↔ personality, ai)
+
+Countries accumulate a living military history — not as a stat modifier, but as a narrative record that shapes how the world sees them and how AI nations reason about them.
+
+- Per-country `martialLegacy: MartialLegacy` — a structured record, not a single number. Tracks: total wars fought, wars won/lost, named battles (#15) participated in (with outcomes), longest streak of victories, most devastating defeat, rivals (countries fought more than once).
+- This is **worldbuilding data, not a combat modifier**. It does not directly affect recruitment cost, army strength, or morale. It is a read-only historical record that other systems consume for narrative and decision-making.
+- **AI consumption (future):** AI decision scoring reads the legacy record to:
+  - Hold grudges: countries that have lost named battles against a rival weight EXPAND toward that rival higher (revenge motive).
+  - Fear proven conquerors: countries with long victory streaks are avoided as EXPAND targets by cautious/mercantile archetypes.
+  - Respect martial peers: hegemon archetypes prefer ALLY with countries that have a strong war record.
+  - Avoid repeating mistakes: a country that lost badly in mountain provinces should deprioritize mountain targets.
+- **Personality integration:** The legacy record feeds into personality ledger entries naturally — "lost the Battle of Stormfell" becomes a persistent grudge entry, not a temporary one.
+- Legacy is append-only during the game. No decay — history doesn't forget.
+- New events: `military:legacy-updated { countryId, entryType, details }` (fires after each war concludes or named battle occurs).
+- Contract additions: `MilitaryState` gains `martialLegacy: Record<CountryId, MartialLegacy>`; `MartialLegacy` interface.
+
+> **Not a modifier.** Resist the temptation to turn this into "+X% combat strength for high legacy." The value is in AI reasoning and narrative richness, not numerical bonuses. If bonuses are ever added, they should be a separate roadmap item with explicit justification.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

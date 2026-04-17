@@ -357,6 +357,19 @@ Provinces with walls automatically generate a small defensive garrison — not a
 - New config: `garrisonStrength`, `garrisonRegenPerFrame`, per-fortification-level garrison values.
 - Contract additions: two new event keys; province-level garrison data (could live in map or military slice — **TODO** decide).
 
+### 23. Population-drafted garrison levies (military ↔ population)
+
+Let provinces raise cheap, weak militia garrisons from their local population — distinct from recruited armies. The bigger the province's population, the larger the levy.
+
+- New action: `raiseLevy(provinceId)` — creates a garrison-like force sized by `population × levyRatio` (default 0.05). Costs no gold but directly reduces province population.
+- Levies are immobile (like garrisons in #22) and fight at `levyCombatEfficiency` (default 0.5× strength).
+- Levies dissolve after `levyDurationFrames` — the farmers go home. Emit `military:levy-disbanded { provinceId, popReturned }` and population is partially restored.
+- **Dead levies are dead people.** Only surviving levy strength is returned to population on disbandment. If the levy is destroyed in combat, that population is permanently lost — no resurrection. Track `initialStrength` vs `currentStrength` at disbandment time; `popReturned = levyPopReturnFraction × (currentStrength / initialStrength) × originalPopTaken`.
+- Cannot stack with a full garrison (#22) — levies are the "no walls" fallback defense.
+- New events: `military:levy-raised { provinceId, strength }`, `military:levy-disbanded`.
+- New config: `levyRatio`, `levyCombatEfficiency`, `levyDurationFrames`, `levyPopReturnFraction`.
+- Contract additions: two new event keys.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

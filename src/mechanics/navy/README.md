@@ -54,3 +54,31 @@ interface Fleet {
 - No update function is needed — the mechanic is purely event-driven.
 - Naval movement, combat, and port requirements are out of scope for this initial implementation.
 - Future: require a `port` building in the province before allowing fleet construction.
+
+## Roadmap
+
+### 1. Naval blockade (navy ↔ map, economy, diplomacy)
+
+A fleet stationed in a coastal province belonging to a country it is at war with imposes a blockade — suppressing that province's income and cutting off seaborne reinforcement.
+
+- Activation: fleet remains stationary in an enemy coastal province for `blockadeActivationFrames`. Navy reads war state via the existing diplomacy slice.
+- On activation, navy emits `navy:blockade-started { fleetId, provinceId, blockadingCountryId, targetCountryId }` and an `economy:province-modifier-added` with id `blockade:<provinceId>` carrying the income suppression (`multiply (1 - blockadeIncomeReduction)`).
+- Lifts on `military:army-destroyed` for the fleet equivalent (or new `navy:fleet-destroyed`), `diplomacy:peace-made`, or fleet movement; emits `navy:blockade-lifted { reason }`.
+- New config: `blockadeIncomeReduction` (0.5), `blockadeActivationFrames`.
+- Contract additions: two new event keys.
+
+### 2. Naval invasion / amphibious landing (navy ↔ military, map, diplomacy)
+
+A fleet co-located with a same-owner army can transport that army across sea to a non-adjacent coastal province at war with the owner. Unblocks isolated-territory strategy.
+
+- New caller-facing function `requestTransport(fleetId, armyId, destinationProvinceId)` validates: same owner, both endpoints coastal, destination owner is at war.
+- Validation failure → `navy:transport-rejected { reason: 'no-fleet' | 'not-coastal' | 'not-at-war' | 'fleet-busy' }`.
+- On success: emit `navy:transport-in-progress { completesAtFrame }`. The army is marked immovable (`transportedByFleetId` field) and military leaves it alone for the duration.
+- After `transportDurationFrames`, emit `navy:transport-complete { fleetId, armyId, newProvinceId }`. Military relocates the army.
+- New config: `transportDurationFrames` (60), `transportCapacityPerFleet` (1).
+- Contract additions: four new event keys; `Army` gains optional `transportedByFleetId: FleetId`.
+
+### Implementation order (suggested)
+
+1. **Blockade** — passive once-positioned mechanic, reuses existing economy modifier pipeline.
+2. **Naval invasion** — adds movement/state-machine surface; land after blockade so coastal positioning is already meaningful.

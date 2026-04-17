@@ -108,3 +108,23 @@ losing nation, so no ledger entry is written from `culture:province-converted`
 directly. The `conquest` branch is a stronger signal anyway and covers the
 aggressive-culture-imposition case. When the event payload is extended to
 include the displaced owner, enable the `onProvinceConverted` reactor.
+
+## Roadmap
+
+### 1. Climate adaptation memory (personality ↔ climate)
+
+The current climate reactors write a single ledger entry per event. Add **doctrinal memory**: repeated exposure to the same climate event type within a window shifts that nation's `InvestmentBias` in a lasting way that outlives the individual events.
+
+- Maintain `climateDoctrine: Record<ClimateEventType, { count: number, lastSeenTurn: number }>` per nation.
+- On `climate:event-started`, increment the count for that event type. If `count >= climateDoctrineThreshold` within `doctrineWindow` turns, apply a permanent (until decay) bias shift via `climateDoctrineBiasDeltas[eventType]` and emit `personality:climate-doctrine-shifted { countryId, climateEventType, newBiasField, newBiasValue }`.
+  - Storm Season → raises `navalInvestmentUrgency`.
+  - Drought → raises `defensiveUrge` and `economicUrge`.
+  - Epidemic → raises `defensiveUrge`, suppresses `aggressiveness`.
+- If the event type does not recur within `doctrineDecayTurns`, the doctrine relaxes back; emit `personality:climate-doctrine-decayed`.
+- This is distinct from the existing per-event ledger reaction — that's the emotional response; this is the institutional response.
+- New config: `climateDoctrineThreshold`, `doctrineWindow`, `doctrineDecayTurns`, `climateDoctrineBiasDeltas` map.
+- Contract additions: two new event keys; `NationPersonality` gains `climateDoctrine: Record<ClimateEventType, ...>` field.
+
+### Implementation order (suggested)
+
+1. **Climate adaptation memory** — small, self-contained extension to the existing climate reactors. Do this before the AI roadmap's "consume personality bias" so the doctrine actually changes AI behavior visibly.

@@ -125,10 +125,85 @@ Culture currently assimilates at a fixed rate independent of who outnumbers whom
 - New config: `unrestThreshold`, `unrestSeverityCurve`.
 - Requires culture to consume new events; contract additions: two event keys.
 
+### 6. Technology two-way coupling (population ↔ technology)
+
+Currently research is purely time-gated. Tie it to demographic mass, and let tech feed back into demographics.
+
+- **Population → research:** total country headcount produces research throughput. Population emits a `technology:research-points-modifier-added { countryId, modifier }` (or analogous to economy modifiers) so a country with 200k people researches ~2× faster than one with 100k. Subscribes to `population:grown` and country-aggregate changes.
+- **Technology → population:** new tech effects in `technology/effects.ts` adjust population behavior:
+  - `agriculture` → `+capacityByTerrain` multiplier on `plains` and `hills`.
+  - `medicine` → reduces `epidemicMortality` (idea #2) and lifts `baseGrowthRatePerTurn`.
+  - `sanitation` → caps urban-tier mortality penalties (idea #4 in this batch).
+  Population subscribes to `technology:research-completed` and updates the effective config per country.
+- New events: `technology:research-points-modifier-added/removed` (mirroring economy modifier shape).
+- New config: `researchPointsPerThousand`, per-tech effect entries in technology config.
+- Contract additions: two event keys; technology contract gains effect fields.
+
+### 7. Sailor pool from coastal populations (population ↔ navy)
+
+Navy currently has no manpower cost at all — only the coastal terrain check. Mirror the army-manpower idea (#1) with a separate, scarcer pool.
+
+- Coastal provinces (per `map.provinces[id].isCoastal`) generate a `sailors` sub-count, derived as `coastalPopulation × sailorFraction`. Inland provinces contribute zero.
+- On `navy:fleet-formed` (or earlier on the `requestBuildFleet` path), population deducts `sailorsPerFleet` from the source province.
+- If insufficient sailors, navy emits `navy:fleet-rejected` with a new reason `'insufficient-sailors'` and population emits `population:sailor-shortage`.
+- Bonus: a `port` building boosts the `sailorFraction` for that province (already in buildings contracts), making port-building strategically meaningful for naval powers.
+- New events: `population:sailors-drained`, `population:sailor-shortage`. Navy reason union grows.
+- New config: `sailorFraction`, `portSailorBonus`, `sailorsPerFleet`.
+- Contract additions: two event keys + extending `navy:fleet-rejected.reason` union.
+
+### 8. Construction labor pool (population ↔ construction)
+
+Populous countries should build faster and in parallel; tiny countries should be throttled. Today the construction mechanic is fully type-agnostic and unbounded — perfect insertion point for a labor budget.
+
+- Population derives a per-country `laborBudget` (e.g. `floor(totalPop × laborFraction)`) and exposes it via a new modifier event.
+- Construction consults the budget when ticking jobs: each active job consumes `laborCost` per tick; if the country's budget is exceeded, jobs progress at a reduced rate (or queue rather than running concurrently).
+- Population emits `population:labor-pool-changed { countryId, available }` whenever country-aggregate population shifts past a threshold.
+- Side-effect: depopulation from war or epidemics now visibly slows construction — a satisfying second-order penalty.
+- New events: `population:labor-pool-changed`.
+- New config: `laborFraction`, `defaultLaborCostPerJob`.
+- Contract additions: one event key; construction config gains a `laborCost` field per buildable type.
+
+### 9. Famine from over-extraction (economy → population)
+
+Right now a province can be drained for income indefinitely without demographic consequence. Couple economic pressure to mortality.
+
+- Compute a per-province `extractionRatio = totalIncomeFromProvince / sustainabilityBase(count, capacity)`. Income from buildings, modifiers, and population itself counts.
+- When `extractionRatio > famineThreshold`, population emits `population:famine-started { provinceId, severity }` and applies a mortality multiplier each tick (count decays toward a reduced effective capacity).
+- When `extractionRatio` drops back below the threshold, emit `population:famine-ended` and resume normal growth.
+- Inverse case: provinces with surplus food (farms but low population) gain a temporary growth multiplier — the existing farm capacity bonus becomes more meaningful early-game.
+- Composes naturally with climate's Drought (idea #2) — drought pushes the ratio above threshold without any extraction change, triggering organic famine cascades.
+- New events: `population:famine-started`, `population:famine-ended`.
+- New config: `famineThreshold`, `famineMortalityRate`, `surplusGrowthBonus`.
+- Contract additions: two event keys. Population needs read access to income aggregates (either via a new economy query event or an `economy:province-income-changed` broadcast).
+
+### 10. Refugee flows on conquest (population → map, culture, personality)
+
+Today, conquest transfers 100% of the population to the new owner with a single re-tag. In reality, people flee.
+
+- On `map:province-conquered`, split the population into:
+  - **Stayers** — remain in the province, re-tagged to the new owner (current behavior, but for a fraction).
+  - **Refugees** — a config fraction (modulated by culture mismatch) flees to adjacent provinces still owned by the *old* owner that share the conquered province's culture. If none exist, refugees scatter into any neighbouring same-culture province regardless of owner.
+- Each refugee flow emits `population:refugees-displaced { fromProvinceId, toProvinceId, amount, originCultureId }`. Receiving provinces gain capacity-pressure (feeds idea #3 migration / #4 famine if overcrowded).
+- Personality consumes the event to write a hostility ledger entry against the conqueror — refugees are a diplomatic memory, not just a demographic shuffle.
+- Culture's mismatch math (existing) plays nicely: refugees concentrate same-culture pockets that resist assimilation longer.
+- New events: `population:refugees-displaced`.
+- New config: `refugeeFractionByCultureMismatch`, `maxRefugeeHopDistance`.
+- Contract additions: one event key; personality consumes it (no new contracts on personality side beyond the ledger writer table).
+
 ### Implementation order (suggested)
+
+Batch 1:
 
 1. **Climate shocks** — smallest blast radius, no new cross-mechanic contracts.
 2. **Migration** — internal to population + map adjacency reads, one new event.
 3. **Manpower cost** — needs military to cooperate; design the rejection flow first.
 4. **Urbanization tiers** — touches buildings/economy gating, biggest contract surface.
 5. **Population-weighted assimilation & unrest** — depends on tier/manpower data settling first.
+
+Batch 2:
+
+6. **Famine from over-extraction** — natural follow-on to climate shocks; reuses the multiplier-stack plumbing.
+7. **Sailor pool** — direct copy of the manpower-cost pattern, narrower scope.
+8. **Refugee flows** — best landed after culture-weighted assimilation so refugees behave correctly.
+9. **Construction labor pool** — touches the central construction tick; do after smaller mechanics are stable.
+10. **Technology two-way coupling** — biggest cross-mechanic surface; lands last so each tech effect can target an already-working subsystem.

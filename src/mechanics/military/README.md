@@ -261,6 +261,20 @@ Give large, decisive engagements a name and a historical record — inspired by 
 - New config: `namedBattleThreshold`, `namedBattleMarginThreshold`.
 - Contract additions: one new event key; `MilitaryState.notableBattles: readonly NamedBattle[]`; `NamedBattle` interface with full detail fields.
 
+### 16. AI strategic focus (military ↔ ai)
+
+Give AI nations a single priority enemy per decision cycle so attacks concentrate on one front instead of scattering randomly.
+
+- Each AI decision cycle, compute a `priorityTargetId` from the existing EXPAND scoring pass: pick the enemy with the highest combined score of threat (province count, army strength near border) and opportunity (weak defenses, terrain advantage, personality bias).
+- All EXPAND actions that cycle target only the priority enemy's provinces. Multiple EXPAND decisions in one batch (#137 in ai design notes) hit different provinces of the same enemy rather than splitting across two wars.
+- Store as `AICountryState.priorityTargetId: CountryId | null` — recalculated fresh each cycle, no persistent state to maintain.
+- Personality shapes focus: expansionist nations prioritize weak neighbors (opportunity), cautious nations prioritize the biggest threat, zealots prioritize cultural mismatches.
+- New events: `ai:focus-changed { countryId, newTargetId, oldTargetId }` (debug/UI signal only).
+- New config: `focusStickinessBonus` (small additive score to keep the same target across cycles, preventing thrashing).
+- Contract additions: `AICountryState` gains `priorityTargetId` field; one new event key.
+
+> **Future AI refinement.** This is a first step toward smarter AI — the scoring is still one-dimensional (pick one enemy). Later iterations should consider multi-front coordination (hold one front defensively while pushing another), army positioning awareness (prefer targets where you have troops nearby), alliance coordination (focus on the same enemy your ally is fighting), and long-term strategic planning (weaken a rival's economy before attacking). Each of these is a separate roadmap item when the base focus system is proven.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

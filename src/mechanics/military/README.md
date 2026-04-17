@@ -321,6 +321,20 @@ A country-level exhaustion meter that rises the longer a war drags on. For now, 
 
 > **Future expansion.** War weariness is intentionally scoped to AI peace desire only. Later iterations could add: recruitment cost increases at high weariness, desertion cascades, population unrest, and player-facing UI pressure. Each would be a separate roadmap item.
 
+### 20. Logistical overstretch / command fragmentation (military ↔ map)
+
+The more armies a country fields, the less effective each one becomes — diminishing returns on raw military mass.
+
+- When a country has more than `overstretchThreshold` (default 5) armies, each army beyond the threshold suffers a combat penalty: `−overstretchPenaltyPerArmy × excessCount`.
+- Represents stretched command structure, divided attention, supply competition.
+- Penalty is global to all that country's armies, not just the excess ones.
+- Emit `military:command-overstretched { countryId, armyCount, penaltyApplied }` when threshold is crossed.
+- Composes with doctrine (#9): Mobile Doctrine raises the threshold by 2.
+- New events: `military:command-overstretched`, `military:command-restored`.
+- New config: `overstretchThreshold`, `overstretchPenaltyPerArmy`, `overstretchPenaltyCap`.
+
+> **Revisit post-implementation.** This is a deliberately simple first pass. Future iterations should consider: per-front overstretch (5 armies on one front is worse than 5 spread across three), supply-line interaction (#1 — unsupplied armies count double toward overstretch), technology reducing the threshold (better comms tech = more armies manageable), and personality-driven tolerance (expansionist archetypes handle more armies before penalty kicks in). Keep this note after implementation as a reminder.
+
 ### Implementation order (suggested)
 
 1. **Supply lines** — the connectivity check is the only complex piece; everything else reuses the existing army strength pipeline.

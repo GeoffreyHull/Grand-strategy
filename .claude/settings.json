@@ -1,0 +1,34 @@
+{
+  "autoMemoryEnabled": true,
+  "autoMemoryDirectory": "~/.claude/projects/Grand-strategy/memory/",
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(git *)",
+      "Bash(npx *)",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep"
+    ],
+    "defaultMode": "default"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; if [[ \"$f\" == *.{ts,tsx,js,jsx,json} ]]; then npx prettier --write \"$f\" 2>/dev/null || true; fi; }",
+            "statusMessage": "Formatting code..."
+          }
+        ]
+      }
+    ]
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "spinnerTipsEnabled": true,
+  "syntaxHighlightingDisabled": false
+}
